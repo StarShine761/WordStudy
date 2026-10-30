@@ -194,7 +194,7 @@ Make sure the clone is complete (about 15 MB), or regenerate it with `python reb
 Not supported. The app relies on Windows console APIs (`ctypes` + `winmm`) for centred layout, mouse word lookup and audio playback.
 
 **How do I add more word books?**
-Put the lists as JSON under `data/wordlists/` and extend `rebuild_vocab_db.py`, or use **7.2 Import from PDF** to add words on the fly.
+Put the lists as JSON under `data/wordlists/` and extend `rebuild_vocab_db.py`, or use **7.2 Import from PDF** to add words on the fly (words missing from the local vocabulary DB are inserted automatically).
 
 ## 🧪 Tests
 

@@ -2406,6 +2406,109 @@ class WordStudyApp:
             conn.close()
         return matched, missing
 
+    def _insert_missing_words(self, entries: List[Dict]) -> List[Dict]:
+        """把词库中不存在的单词直接新增到本地词库 VOC_TB
+
+        entries: [{'word': 'abandon', 'meaning': '放弃'}, ...]
+        返回新增后的词条，结构与 _lookup_words_exact 的返回一致。
+        """
+        prepared = []
+        seen = set()
+        for entry in entries or []:
+            word = (entry.get('word') or '').strip()
+            if not word:
+                continue
+            key = word.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            vc_id = hashlib.md5(f"import:{key}".encode('utf-8')).hexdigest()[:24]
+            prepared.append({
+                'key': key,
+                'info': {
+                    'vc_id': vc_id,
+                    'vocabulary': word,
+                    'interpretation': (entry.get('meaning') or '').strip(),
+                    'phonetic_us': '',
+                },
+            })
+        if not prepared:
+            return []
+
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        conn = sqlite3.connect(self.db_path)
+        try:
+            # 先确认词库里确实没有这些单词，避免重复新增同名单词
+            existing = set()
+            keys = [item['key'] for item in prepared]
+            for start in range(0, len(keys), 500):
+                chunk = keys[start:start + 500]
+                placeholders = ','.join('?' * len(chunk))
+                rows = conn.execute(
+                    f'SELECT LOWER(vc_vocabulary) FROM VOC_TB '
+                    f'WHERE LOWER(vc_vocabulary) IN ({placeholders})',
+                    chunk,
+                ).fetchall()
+                existing.update(row[0] for row in rows)
+
+            rows_to_insert = []
+            for item in prepared:
+                if item['key'] in existing:
+                    continue
+                info = item['info']
+                word = info['vocabulary']
+                rows_to_insert.append((
+                    info['vc_id'],
+                    None,
+                    word[:100],
+                    word[0].upper() if word else '',
+                    '',
+                    info['phonetic_us'],
+                    info['interpretation'],
+                    '',
+                    0,
+                    0.0,
+                    '',
+                    now,
+                    0,
+                    0.0,
+                ))
+
+            if rows_to_insert:
+                conn.executemany(
+                    """INSERT OR IGNORE INTO VOC_TB
+                       (vc_id, original_id, vc_vocabulary, vc_initial,
+                        vc_phonetic_uk, vc_phonetic_us, vc_interpretation,
+                        vc_pronunciation, vc_frequency, vc_difficulty,
+                        vc_phrase, vc_updated_time, vc_study_user_count,
+                        vc_acknowledge_rate)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    rows_to_insert,
+                )
+                conn.commit()
+
+            inserted = []
+            ids = [row[0] for row in rows_to_insert]
+            for start in range(0, len(ids), 500):
+                chunk = ids[start:start + 500]
+                placeholders = ','.join('?' * len(chunk))
+                rows = conn.execute(
+                    f'''SELECT vc_id, vc_vocabulary, vc_interpretation,
+                               vc_phonetic_us
+                        FROM VOC_TB WHERE vc_id IN ({placeholders})''',
+                    chunk,
+                ).fetchall()
+                for row in rows:
+                    inserted.append({
+                        'vc_id': row[0],
+                        'vocabulary': row[1],
+                        'interpretation': row[2],
+                        'phonetic_us': row[3],
+                    })
+        finally:
+            conn.close()
+        return inserted
+
     @staticmethod
     def _choose_file_dialog(title: str, filetypes):
         """弹出系统文件选择框。返回 (状态, 路径)，状态为 ok/cancel/unavailable"""
@@ -2543,46 +2646,91 @@ class WordStudyApp:
                 word['imported_word'] = entry['word']
                 word['imported_meaning'] = entry['meaning']
 
+        # 词库里没有的单词直接新增入库，不再丢弃
+        new_words = []
+        if missing:
+            missing_entries = [
+                entry_by_key[word.lower()] for word in missing
+                if word.lower() in entry_by_key
+            ]
+            try:
+                new_words = self._insert_missing_words(missing_entries)
+            except Exception as e:
+                print(f"⚠️ 新增词库失败: {e}")
+
+        added_keys = {w['vocabulary'].lower() for w in new_words}
+        still_missing = [w for w in missing if w.lower() not in added_keys]
+
+        # 按PDF中的顺序合并，保持导入时的词表顺序
+        word_by_key = {w['vocabulary'].lower(): w for w in matched}
+        for word in new_words:
+            word_by_key.setdefault(word['vocabulary'].lower(), word)
+        words = []
+        seen_keys = set()
+        for entry in entries:
+            key = entry['word'].lower()
+            if key in seen_keys:
+                continue
+            word = word_by_key.get(key)
+            if word is not None:
+                seen_keys.add(key)
+                words.append(word)
+
         print("\n" + "="*60)
-        print(f"匹配结果: {len(matched)}/{len(entries)}")
+        print(f"词库已有 {len(matched)} 个 | 新增入库 {len(new_words)} 个 | "
+              f"可加入学习列表 {len(words)} 个")
         print("="*60)
-        for i, word in enumerate(matched, 1):
+        for i, word in enumerate(words, 1):
             display_word = word.get('imported_word') or word['vocabulary']
             meaning = (word.get('imported_meaning') or word['interpretation'] or '')
             print(f"{i:2d}. {display_word}")
             print(format_meaning(meaning, first_prefix="    ", cont_prefix="    "))
 
         overwrite_count = sum(
-            1 for w in matched
+            1 for w in words
             if (w.get('imported_word') and w['imported_word'] != w['vocabulary'])
             or (w.get('imported_meaning')
                 and w['imported_meaning'] != (w.get('interpretation') or ''))
         )
+        blank_meaning = [
+            w['vocabulary'] for w in new_words
+            if not (w.get('interpretation') or '').strip()
+        ]
 
-        if missing:
-            print(f"\n⚠️ 词库中未找到 {len(missing)} 个单词:")
-            print("   " + ", ".join(missing))
+        if still_missing:
+            print(f"\n⚠️ 有 {len(still_missing)} 个单词新增失败，未能加入学习列表:")
+            print("   " + ", ".join(still_missing))
+        if blank_meaning:
+            print(f"\nℹ️ {len(blank_meaning)} 个新增单词没有中文释义，学习时会显示为空:")
+            print("   " + ", ".join(blank_meaning))
 
-        if not matched:
+        if not words:
             print("\n❌ 没有可添加的单词")
             return
 
-        prompt = f"\n将 {len(matched)} 个单词加入学习列表"
+        prompt = f"\n将 {len(words)} 个单词加入学习列表"
+        if new_words:
+            prompt += f"，并在本地词库新增 {len(new_words)} 个单词"
         if overwrite_count:
             prompt += f"，并用导入的英文和释义覆盖本地词库 {overwrite_count} 条"
         confirm = input(prompt + "? (y/n): ").strip().lower()
         if confirm != 'y':
+            if new_words:
+                print(f"ℹ️ 已新增到本地词库的 {len(new_words)} 个单词会保留，"
+                      "之后可在 7.1 中搜索添加")
             print("❌ 已取消导入")
             return
 
-        updated = self._overwrite_local_entries(matched)
-        for word in matched:
+        updated = self._overwrite_local_entries(words)
+        for word in words:
             if word.get('imported_word'):
                 word['vocabulary'] = word['imported_word']
             if word.get('imported_meaning'):
                 word['interpretation'] = word['imported_meaning']
-        added = self.add_to_study_list(matched)
-        skipped = len(matched) - added
+        added = self.add_to_study_list(words)
+        skipped = len(words) - added
+        if new_words:
+            print(f"✨ 已在本地词库新增 {len(new_words)} 个单词")
         if updated:
             print(f"✏️ 已用导入内容覆盖本地词库 {updated} 条")
         print(f"\n✅ 成功添加 {added} 个单词到学习列表")
@@ -2603,7 +2751,25 @@ class WordStudyApp:
         
         words = self.search_words(keyword, limit=20)
         if not words:
-            print(f"❌ 未找到 '{keyword}' 的单词")
+            print(f"❌ 词库中未找到 '{keyword}'")
+            if not re.fullmatch(r"[A-Za-z][A-Za-z'’\-]{0,49}", keyword):
+                return
+            confirm = input("是否直接新增该单词到本地词库? (y/n): ").strip().lower()
+            if confirm != 'y':
+                return
+            meaning = input("请输入中文释义 (可留空): ").strip()
+            try:
+                new_words = self._insert_missing_words(
+                    [{'word': keyword, 'meaning': meaning}]
+                )
+            except Exception as e:
+                print(f"❌ 新增单词失败: {e}")
+                return
+            if not new_words:
+                print("❌ 该单词已在词库中")
+                return
+            added = self.add_to_study_list(new_words)
+            print(f"✨ 已在本地词库新增单词，并添加 {added} 个到学习列表")
             return
         
         print(f"\n✅ 找到 {len(words)} 个单词:")
