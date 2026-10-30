@@ -1,0 +1,25 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# ---- 个人学习数据（不入库） ----
+word_study.db
+word_study.db-*
+user_config.json
+config.json
+
+# ---- 本地数据目录：备份 / 原始词表 / TTS 缓存 / 阅读题库源文件 ----
+data/
+
+# ---- 系统与编辑器 ----
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+.idea/
+.vscode/
