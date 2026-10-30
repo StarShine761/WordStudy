@@ -23,3 +23,6 @@ desktop.ini
 *.log
 .idea/
 .vscode/
+
+# ---- 截图生成中间产物 ----
+docs/_raw/
