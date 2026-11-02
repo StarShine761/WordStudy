@@ -455,7 +455,26 @@ class WordStudyApp:
                 return
             _mci_send(f'open "{path}" type mpegvideo alias {alias}')
             try:
+                # 蓝牙耳机在新建播放图后的前几百毫秒容易丢帧，听起来像单词开头
+                # 被吃掉。先静音预跑一小段把音频链路跑热，再从 0 正式发声。
+                muted = True
+                try:
+                    _mci_send(f'setaudio {alias} volume to 0')
+                except OSError:
+                    muted = False
                 _mci_send(f'play {alias}')
+                if muted:
+                    warmup_deadline = time.monotonic() + 0.35
+                    while time.monotonic() < warmup_deadline:
+                        if interruptible and seq != self._speak_seq:
+                            return
+                        time.sleep(0.05)
+                    try:
+                        _mci_send(f'play {alias} from 0')
+                    except OSError:
+                        _mci_send(f'stop {alias}')
+                        _mci_send(f'play {alias}')
+                    _mci_send(f'setaudio {alias} volume to 1000')
                 try:
                     length_ms = int(_mci_send(f'status {alias} length') or 0)
                 except (OSError, ValueError):
@@ -2332,6 +2351,29 @@ class WordStudyApp:
                 entry['meaning'] = meaning
             last_entry = entry
 
+        # 释义续行常见的词性/词组标签，如 "n. 小道…"、"phrase. 跟踪…"
+        continuation_label = re.compile(
+            r"^(?:vt|vi|v|n|adj|adv|prep|pron|conj|num|art|aux|int|"
+            r"phrase|phr|abbr|pl|etc)\s*[.．]",
+            re.I,
+        )
+
+        def mask_parentheses(text: str) -> str:
+            """把括号（含全角）里的内容替换成空格，保留字符位置"""
+            chars = list(text)
+            depth = 0
+            for i, ch in enumerate(chars):
+                if ch in '（(':
+                    depth += 1
+                    chars[i] = ' '
+                elif ch in '）)':
+                    if depth:
+                        depth -= 1
+                    chars[i] = ' '
+                elif depth:
+                    chars[i] = ' '
+            return ''.join(chars)
+
         for raw in text.splitlines():
             line = raw.replace('\u00a0', ' ').replace('\u3000', ' ').strip()
             if not line:
@@ -2340,8 +2382,20 @@ class WordStudyApp:
             line = re.sub(r'\[[^\]]*\]', ' ', line)
             line = re.sub(r'/[^/]{0,40}/', ' ', line)
 
+            # 括号里的英文是搭配/例句（如 keep track of），不是词表条目
+            scan_line = mask_parentheses(line)
+
+            # 标签开头的行是上一条释义的续行，不能当成新单词（如 phrase. 跟踪…）
+            if continuation_label.match(scan_line):
+                if (cjk_pattern.search(line) and last_entry is not None
+                        and not last_entry['meaning']):
+                    last_entry['meaning'] = re.sub(
+                        r'(?:\s+\d+)+\s*$', '', line
+                    ).strip()
+                continue
+
             tokens = []
-            for match in re.finditer(word_pattern, line):
+            for match in re.finditer(word_pattern, scan_line):
                 token = match.group(0).strip("-'’")
                 if len(token) < 2:
                     continue
@@ -2800,6 +2854,8 @@ class WordStudyApp:
             print(f"📊 学习列表 {stats['total']} 词 | 今日到期 {stats['due']} | "
                   f"新词 {stats['new_introduced']}/{stats['new_limit']} | "
                   f"待学新词 {stats['new_available']}")
+            if stats['new_today']:
+                print(f"🆕 今日导入待学 {stats['new_today']} 词（必学）")
             if stats['extra_available']:
                 print(f"🧠 今日巩固 {stats['extra_available']} 词（今日已学及薄弱词）")
             print("="*60)

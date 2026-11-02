@@ -94,8 +94,31 @@ def count_due(conn, now, today):
     ).fetchone()[0]
 
 
-def new_cards(conn, today, limit):
+def today_new_cards(conn, today):
+    """Cards imported today and not yet studied: mandatory, quota-free."""
     conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        f"""
+        SELECT {_COLUMNS} FROM study_list s
+        WHERE s.state = 0 AND s.add_date = ?
+          AND NOT EXISTS (
+              SELECT 1 FROM review_log r
+              WHERE r.voc_id = s.voc_id AND r.local_date = ? AND r.is_practice = 0
+          )
+        ORDER BY s.id ASC
+        """,
+        (today, today),
+    ).fetchall()
+    return [CardRow(**dict(row)) for row in rows]
+
+
+def new_cards(conn, today, limit, exclude_today=False):
+    conn.row_factory = sqlite3.Row
+    exclude_sql = "AND (s.add_date IS NULL OR s.add_date <> ?)" if exclude_today else ""
+    params = [today]
+    if exclude_today:
+        params.append(today)
+    params.append(limit)
     rows = conn.execute(
         f"""
         SELECT {_COLUMNS} FROM study_list s
@@ -104,10 +127,11 @@ def new_cards(conn, today, limit):
               SELECT 1 FROM review_log r
               WHERE r.voc_id = s.voc_id AND r.local_date = ? AND r.is_practice = 0
           )
+          {exclude_sql}
         ORDER BY s.created_at IS NULL, s.created_at ASC, s.id ASC
         LIMIT ?
         """,
-        (today, limit),
+        params,
     ).fetchall()
     return [CardRow(**dict(row)) for row in rows]
 

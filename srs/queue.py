@@ -21,6 +21,7 @@ class SessionPlan:
     new_introduced_today: int = 0
     new_quota: int = 0
     extra_total: int = 0
+    mandatory_total: int = 0
 
 
 def _interleave(due, new):
@@ -41,14 +42,21 @@ def _interleave(due, new):
 
 def build_session(conn, now, today, size, new_limit):
     size = max(1, int(size))
-    due = store.due_cards(conn, now, today, size)
+    # Words imported today are mandatory: they are studied before due reviews
+    # and are not capped by the daily new-word limit.
+    mandatory = store.today_new_cards(conn, today)
+    slots = max(0, size - len(mandatory))
+    due = store.due_cards(conn, now, today, slots)
     introduced = store.new_introduced_today(conn, today)
     quota = max(0, int(new_limit) - introduced)
-    quota = min(quota, max(0, size - len(due)))
-    new = store.new_cards(conn, today, quota)
+    quota = min(quota, max(0, slots - len(due)))
+    new = store.new_cards(conn, today, quota, exclude_today=True)
 
-    items = [QueueItem(card, False) for card in due]
-    items = _interleave(items, [QueueItem(card, True) for card in new])
+    items = [QueueItem(card, True) for card in mandatory]
+    items += _interleave(
+        [QueueItem(card, False) for card in due],
+        [QueueItem(card, True) for card in new],
+    )
 
     # Always fill up to the session size: when nothing is due and the daily
     # new-word quota is used up, revisit today's and the shakiest learned
@@ -63,10 +71,11 @@ def build_session(conn, now, today, size, new_limit):
     return SessionPlan(
         items=items,
         due_total=len(due),
-        new_total=len(new),
+        new_total=len(mandatory) + len(new),
         new_introduced_today=introduced,
         new_quota=quota,
         extra_total=len(extra),
+        mandatory_total=len(mandatory),
     )
 
 
@@ -76,11 +85,14 @@ def session_stats(conn, now, today, new_limit, size):
     total_new = store.count_new_total(conn)
     total_cards = conn.execute("SELECT COUNT(*) FROM study_list").fetchone()[0]
     remaining = max(0, int(new_limit) - introduced)
+    mandatory = plan.mandatory_total
+    regular_new = max(0, total_new - mandatory)
     return {
         "due": store.count_due(conn, now, today),
         "new_introduced": introduced,
         "new_total": total_new,
-        "new_available": min(total_new, remaining),
+        "new_available": mandatory + min(regular_new, remaining),
+        "new_today": mandatory,
         "new_limit": int(new_limit),
         "extra_available": plan.extra_total,
         "total": total_cards,
