@@ -856,7 +856,7 @@ class WordStudyApp:
         return result
 
     def _ask_quiz(self, word: Dict, kind: str = 'interpretation',
-                  allow_replay: bool = False):
+                  allow_replay: bool = False, reveal_word: bool = False):
         """正确项在 1-4 中随机（4=以上三个都不对），5 恒判错；返回 None 表示用户选择返回"""
         correct_slot = random.randint(1, 4)
         options = self.build_quiz_options(
@@ -939,6 +939,8 @@ class WordStudyApp:
                 continue
 
             correct = choice == correct_label
+            if reveal_word:
+                print(f"\n📝 单词: \033[1;33m{word.get('vocabulary', '')}\033[0m")
             if correct:
                 print_answer("✅ 正确! 答案: ")
             elif choice == '5':
@@ -1143,7 +1145,9 @@ class WordStudyApp:
             self.speak_sync(word['vocabulary'])
             
             started = time.perf_counter()
-            result = self._ask_quiz(word, 'interpretation', allow_replay=True)
+            result = self._ask_quiz(
+                word, 'interpretation', allow_replay=True, reveal_word=True
+            )
             if result is None:
                 print("\n👋 返回主菜单")
                 return
@@ -1504,7 +1508,9 @@ class WordStudyApp:
             self.speak_sync(word['vocabulary'])
             
             started = time.perf_counter()
-            result = self._ask_quiz(word, 'interpretation', allow_replay=True)
+            result = self._ask_quiz(
+                word, 'interpretation', allow_replay=True, reveal_word=True
+            )
             if result is None:
                 print("\n👋 返回")
                 return
