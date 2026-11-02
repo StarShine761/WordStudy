@@ -43,8 +43,8 @@ Options are shuffled every time; a wrong answer reveals the correct one immediat
 
 ### 🧠 FSRS scheduling
 - Built on [py-fsrs](https://github.com/open-spaced-repetition/py-fsrs) (stability / difficulty model), not a fixed interval table
-- **Words imported today are mandatory**: every session today leads with them and they bypass the daily new-word quota; after that, due reviews come first, then new words up to the quota
-- When due reviews and new words run short the session is topped up with words learned today or with shaky memories
+- **Words imported today are mandatory**: every session today includes them and they bypass the daily new-word quota; the whole session is shuffled, so words are never shown in import/due order
+- When due reviews and new words run short the session is topped up with words learned today, sampled randomly so the same batch is not replayed all day
 - Wrong → `Again` (rescheduled at once); correct but slow or replayed → `Hard`; normal correct → `Good`
 - A new word answered correctly comes back the next day, then FSRS takes over
 - Adjustable target retention (default **0.90**), max interval 3650 days, leeches flagged automatically

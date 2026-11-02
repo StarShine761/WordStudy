@@ -984,7 +984,7 @@ class WordStudyApp:
     def _print_extra_hint(self, words: List[Dict]):
         extra = sum(1 for word in words if word.get('is_extra'))
         if extra:
-            print(f"🧠 其中 {extra} 个为巩固词：优先今日已学、记忆不牢的单词")
+            print(f"🧠 其中 {extra} 个为巩固词：从今日已学的词中随机抽取")
 
     def mode_english_to_chinese(self):
         """模式1: 看英文，选择中文（选择题模式）"""
@@ -2864,7 +2864,7 @@ class WordStudyApp:
                 print(f"🆕 今日导入必学 {stats['new_today']} 词 | "
                       f"未学 {stats['new_today_pending']}")
             if stats['extra_available']:
-                print(f"🧠 今日巩固 {stats['extra_available']} 词（今日已学及薄弱词）")
+                print(f"🧠 今日巩固 {stats['extra_available']} 词（今日已学词随机巩固）")
             print("="*60)
             print("1. 📖 看英选中 (带发音)")
             print("2. 📝 看中选英")

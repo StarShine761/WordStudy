@@ -159,8 +159,9 @@ def new_cards(conn, today, limit, exclude_today=False):
 def extra_cards(conn, today, limit, exclude_ids=(), exclude_today=False):
     """Learned cards used to top up a daily session.
 
-    Today's reviewed cards come first, then the shakiest memories: leeches,
-    many lapses, frequent mistakes, low stability and high difficulty.
+    Today's reviewed cards are preferred, then the pool is shuffled so that
+    repeated sessions in one day do not replay the same words in the same
+    order.
     """
     if limit <= 0:
         return []
@@ -179,8 +180,7 @@ def extra_cards(conn, today, limit, exclude_ids=(), exclude_today=False):
         SELECT {_QUALIFIED_COLUMNS} FROM study_list s
         LEFT JOIN (
             SELECT voc_id,
-                   MAX(CASE WHEN local_date = ? THEN 1 ELSE 0 END) AS seen_today,
-                   SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) AS wrongs
+                   MAX(CASE WHEN local_date = ? THEN 1 ELSE 0 END) AS seen_today
             FROM review_log
             WHERE is_practice = 0
             GROUP BY voc_id
@@ -188,13 +188,7 @@ def extra_cards(conn, today, limit, exclude_ids=(), exclude_today=False):
         WHERE s.state > 0
           {exclude_sql}
         ORDER BY COALESCE(h.seen_today, 0) DESC,
-                 s.is_leech DESC,
-                 COALESCE(h.wrongs, 0) DESC,
-                 s.lapses DESC,
-                 COALESCE(s.stability, 0) ASC,
-                 COALESCE(s.difficulty, 0) DESC,
-                 COALESCE(s.due_at, 0) ASC,
-                 s.id ASC
+                 RANDOM()
         LIMIT ?
         """,
         params,

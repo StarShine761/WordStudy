@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Session building: due reviews first, new words under a daily quota."""
 
+import random
 from dataclasses import dataclass, field
 
 from . import store
@@ -44,7 +45,8 @@ def _interleave(due, new):
 def build_session(conn, now, today, size, new_limit):
     size = max(1, int(size))
     # Every word imported today is studied in every session today, even if it
-    # was already answered: they lead the session and bypass the daily quota.
+    # was already answered: they bypass the daily quota. The final order is
+    # shuffled so repeated runs do not replay the same sequence.
     mandatory = store.today_imported_cards(conn, today)
     slots = max(0, size - len(mandatory))
     due = store.due_cards(conn, now, today, slots, exclude_today=True)
@@ -70,6 +72,8 @@ def build_session(conn, now, today, size, new_limit):
             conn, today, missing, taken, exclude_today=True
         )
         items.extend(QueueItem(card, False, True) for card in extra)
+
+    random.shuffle(items)
 
     return SessionPlan(
         items=items,
