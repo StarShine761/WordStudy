@@ -73,16 +73,22 @@ def add_card(conn, voc_id, vocabulary, now, today):
     return cursor.rowcount
 
 
-def due_cards(conn, now, today, limit):
+def due_cards(conn, now, today, limit, exclude_today=False):
+    exclude_sql = "AND (s.add_date IS NULL OR s.add_date <> ?)" if exclude_today else ""
     conn.row_factory = sqlite3.Row
+    params = [now, today]
+    if exclude_today:
+        params.append(today)
+    params.append(limit)
     rows = conn.execute(
         f"""
         SELECT {_COLUMNS} FROM study_list s
         WHERE {_DUE_PREDICATE}
+          {exclude_sql}
         ORDER BY s.is_leech DESC, s.due_at ASC, s.id ASC
         LIMIT ?
         """,
-        (now, today, limit),
+        params,
     ).fetchall()
     return [CardRow(**dict(row)) for row in rows]
 
@@ -94,8 +100,22 @@ def count_due(conn, now, today):
     ).fetchone()[0]
 
 
+def today_imported_cards(conn, today):
+    """All cards imported today; every session today must include them."""
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        f"""
+        SELECT {_COLUMNS} FROM study_list s
+        WHERE s.add_date = ?
+        ORDER BY s.id ASC
+        """,
+        (today,),
+    ).fetchall()
+    return [CardRow(**dict(row)) for row in rows]
+
+
 def today_new_cards(conn, today):
-    """Cards imported today and not yet studied: mandatory, quota-free."""
+    """Cards imported today and not yet studied."""
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
         f"""
@@ -136,7 +156,7 @@ def new_cards(conn, today, limit, exclude_today=False):
     return [CardRow(**dict(row)) for row in rows]
 
 
-def extra_cards(conn, today, limit, exclude_ids=()):
+def extra_cards(conn, today, limit, exclude_ids=(), exclude_today=False):
     """Learned cards used to top up a daily session.
 
     Today's reviewed cards come first, then the shakiest memories: leeches,
@@ -147,6 +167,12 @@ def extra_cards(conn, today, limit, exclude_ids=()):
     exclude = [str(voc_id) for voc_id in exclude_ids]
     placeholders = ",".join("?" * len(exclude))
     exclude_sql = f"AND s.voc_id NOT IN ({placeholders})" if exclude else ""
+    if exclude_today:
+        exclude_sql += " AND (s.add_date IS NULL OR s.add_date <> ?)"
+    params = [today, *exclude]
+    if exclude_today:
+        params.append(today)
+    params.append(limit)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
         f"""
@@ -171,7 +197,7 @@ def extra_cards(conn, today, limit, exclude_ids=()):
                  s.id ASC
         LIMIT ?
         """,
-        [today, *exclude, limit],
+        params,
     ).fetchall()
     return [CardRow(**dict(row)) for row in rows]
 

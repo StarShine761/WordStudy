@@ -2855,7 +2855,8 @@ class WordStudyApp:
                   f"新词 {stats['new_introduced']}/{stats['new_limit']} | "
                   f"待学新词 {stats['new_available']}")
             if stats['new_today']:
-                print(f"🆕 今日导入待学 {stats['new_today']} 词（必学）")
+                print(f"🆕 今日导入必学 {stats['new_today']} 词 | "
+                      f"未学 {stats['new_today_pending']}")
             if stats['extra_available']:
                 print(f"🧠 今日巩固 {stats['extra_available']} 词（今日已学及薄弱词）")
             print("="*60)
