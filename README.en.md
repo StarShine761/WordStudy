@@ -71,6 +71,7 @@ Options are shuffled every time; a wrong answer reveals the correct one immediat
 ### 📖 IELTS reading trainer
 - Exam-style flow: pick a paper → read the passage in a split view → answer question by question → get scored → review mistakes
 - Terminal reader with the passage on the left and a dictionary pane on the right — **double-click a word to look it up**
+- If the offline vocabulary lacks a definition, the word is looked up online (Youdao) and saved back into `word_learn.db` for offline use next time
 - Covers single/multiple choice, TRUE/FALSE/NOT GIVEN, YES/NO/NOT GIVEN, matching, classification, summary/sentence/table/diagram completion and short answers
 - The question bank is not bundled: run `python import_reading.py` to download 200+ passages (~2,800 questions) from [hwttop5/ielts-reading-past-papers](https://github.com/hwttop5/ielts-reading-past-papers)
 

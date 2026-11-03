@@ -3,6 +3,7 @@
 """终端阅读器：左侧原文，右侧释义栏，双击单词显示中文释义。"""
 
 import ctypes
+import hashlib
 import os
 import re
 import sqlite3
@@ -11,8 +12,10 @@ import textwrap
 import time
 import unicodedata
 from ctypes import wintypes
+from datetime import datetime
 
 from meaning_format import meaning_lines
+from online_dict import OnlineLookupError, fetch as fetch_online
 
 DICT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "word_learn.db")
 
@@ -192,9 +195,13 @@ def fit(text, width, style=""):
 
 
 class Dictionary:
+    NEGATIVE_TTL = 60.0
+
     def __init__(self, path=DICT_PATH):
+        self.path = path
         self.conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
         self.cache = {}
+        self.online_cache = {}
 
     def close(self):
         self.conn.close()
@@ -236,6 +243,85 @@ class Dictionary:
             "us": (row[2] or "").strip(),
             "meanings": meanings,
         }
+
+    def fetch_and_store(self, word):
+        """联网查询释义并写入词库；查不到返回 None。
+
+        查询失败（网络不可用等）抛 OnlineLookupError，失败结果缓存
+        NEGATIVE_TTL 秒，避免反复点击时一直卡在超时上。
+        """
+        key = word.lower()
+        cached = self.online_cache.get(key)
+        if cached:
+            if cached["entry"] is not None:
+                return cached["entry"]
+            if time.monotonic() - cached["stamp"] < self.NEGATIVE_TTL:
+                if cached["error"]:
+                    raise OnlineLookupError(cached["error"])
+                return None
+
+        try:
+            entry = fetch_online(word)
+        except OnlineLookupError as exc:
+            self.online_cache[key] = {
+                "entry": None, "stamp": time.monotonic(), "error": str(exc)}
+            raise
+        if entry is None:
+            self.online_cache[key] = {
+                "entry": None, "stamp": time.monotonic(), "error": ""}
+            return None
+
+        entry["word"] = word
+        try:
+            self._save_entry(word, entry)
+            entry["stored"] = True
+        except sqlite3.Error:
+            # 词库被其他进程占用时仍然显示联网释义
+            entry["stored"] = False
+        self.online_cache[key] = {
+            "entry": entry, "stamp": time.monotonic(), "error": ""}
+        self.cache[key] = entry
+        return entry
+
+    def _save_entry(self, word, entry):
+        """把联网查到的释义写回词库：已有条目补全，没有则新增。"""
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        conn = sqlite3.connect(self.path, timeout=5)
+        try:
+            ids = [row[0] for row in conn.execute(
+                "SELECT vc_id FROM VOC_TB WHERE vc_vocabulary = ? COLLATE NOCASE",
+                (word,),
+            )]
+            if ids:
+                conn.executemany(
+                    """UPDATE VOC_TB SET
+                           vc_interpretation = ?,
+                           vc_phonetic_uk = CASE WHEN COALESCE(vc_phonetic_uk, '') = ''
+                                                 THEN ? ELSE vc_phonetic_uk END,
+                           vc_phonetic_us = CASE WHEN COALESCE(vc_phonetic_us, '') = ''
+                                                 THEN ? ELSE vc_phonetic_us END,
+                           vc_updated_time = ?
+                       WHERE vc_id = ?""",
+                    [("\n".join(entry["meanings"]), entry["uk"], entry["us"], now, vc_id)
+                     for vc_id in ids],
+                )
+            else:
+                vc_id = hashlib.md5(f"online:{word.lower()}".encode("utf-8")).hexdigest()[:24]
+                conn.execute(
+                    """INSERT OR IGNORE INTO VOC_TB
+                       (vc_id, original_id, vc_vocabulary, vc_initial,
+                        vc_phonetic_uk, vc_phonetic_us, vc_interpretation,
+                        vc_pronunciation, vc_frequency, vc_difficulty,
+                        vc_phrase, vc_updated_time, vc_study_user_count,
+                        vc_acknowledge_rate)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (vc_id, None, word[:100], word[:1].upper(),
+                     entry["uk"], entry["us"], "\n".join(entry["meanings"]),
+                     "", 0, 0.0, "", now, 0, 0.0),
+                )
+            conn.commit()
+        finally:
+            conn.close()
 
     @staticmethod
     def _candidates(word):
@@ -295,6 +381,8 @@ class ConsoleReader:
         self.sel = None
         self.panel_word = ""
         self.panel_entry = None
+        self.panel_status = ""
+        self.panel_source = ""
         self.dirty = True
         self.too_small = False
         self._last_click = (0.0, -1, -1)
@@ -483,6 +571,29 @@ class ConsoleReader:
         self.sel = (index, start, end)
         self.panel_word = word
         self.panel_entry = self.dictionary.lookup(word)
+        self.panel_status = ""
+        self.panel_source = ""
+        self._build_panel()
+        if not (self.panel_entry and self.panel_entry["meanings"]):
+            self._lookup_online(word)
+        self.dirty = True
+
+    def _lookup_online(self, word):
+        self.panel_status = "正在联网查询释义…"
+        self._build_panel()
+        self._draw()
+        try:
+            entry = self.dictionary.fetch_and_store(word)
+        except OnlineLookupError:
+            entry = None
+            self.panel_status = "联网查询失败，请检查网络后重试"
+        else:
+            if entry:
+                self.panel_entry = entry
+                self.panel_source = "online"
+                self.panel_status = ""
+            else:
+                self.panel_status = "联网也未找到该词释义"
         self._build_panel()
         self.dirty = True
 
@@ -497,6 +608,8 @@ class ConsoleReader:
         self.sel = None
         self.panel_word = ""
         self.panel_entry = None
+        self.panel_status = ""
+        self.panel_source = ""
         self._build_panel()
         self.dirty = True
 
@@ -539,6 +652,8 @@ class ConsoleReader:
                 self.sel = None
                 self.panel_word = ""
                 self.panel_entry = None
+                self.panel_status = ""
+                self.panel_source = ""
         self.top = max(0, min(self.top, max(0, len(self.lines) - body_h)))
         self._build_panel()
         self.dirty = True
@@ -581,6 +696,13 @@ class ConsoleReader:
                 if entry["word"].lower() != self.panel_word.lower():
                     rows.append(("", ""))
                     rows.append((f"原形 {entry['word']}", S_GREY))
+                if self.panel_source == "online":
+                    rows.append(("", ""))
+                    note = ("已联网查询并存入词库" if entry.get("stored", True)
+                            else "已联网查询（写入词库失败）")
+                    rows.append((note, S_GREY))
+            elif self.panel_status:
+                rows.extend((line, S_GREY) for line in wrap_display(self.panel_status, inner))
             elif entry:
                 rows.append(("该词释义在词库中不可用", S_GREY))
             else:

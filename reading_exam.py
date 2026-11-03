@@ -68,6 +68,8 @@ class ExamReader(ConsoleReader):
                 self.sel = None
                 self.panel_word = ""
                 self.panel_entry = None
+                self.panel_status = ""
+                self.panel_source = ""
         self._build_doc()
         self.top = max(0, min(self.top, max(0, len(self.doc) - self.body_h)))
         self._build_panel()

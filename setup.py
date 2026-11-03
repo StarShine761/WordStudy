@@ -16,6 +16,7 @@ setup(
     py_modules=[
         "word_study",
         "meaning_format",
+        "online_dict",
         "reading_viewer",
         "reading_exam",
         "reading_practice",

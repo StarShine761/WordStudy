@@ -69,6 +69,7 @@
 ### 📖 雅思阅读训练
 - 真题式训练流程：选套题 → 分栏阅读原文 → 逐题作答 → 判分 → 错题回顾
 - 终端阅读器左侧原文、右侧释义栏，**鼠标双击单词即查释义**
+- 离线词库没有释义时自动联网查询（有道词典），查到后写回 `word_learn.db`，下次直接离线可用
 - 覆盖单选、多选、T/F/NG、Y/N/NG、匹配、分类、摘要填空、句子/表格/图示填空、简答等题型
 - 题库不随仓库分发，运行 `python import_reading.py` 从 [hwttop5/ielts-reading-past-papers](https://github.com/hwttop5/ielts-reading-past-papers) 下载并导入 200+ 篇、约 2800 题
 
