@@ -552,21 +552,9 @@ class ConsoleReader:
             self._click(x, y, double=False)
 
     def _click(self, x, y, double):
-        now = time.monotonic()
-        if not double:
-            last_time, last_x, last_y = self._last_click
-            if (now - last_time <= 0.5 and abs(x - last_x) <= 1 and abs(y - last_y) <= 1):
-                double = True
-                self._last_click = (0.0, x, y)
-            else:
-                self._last_click = (now, x, y)
-        else:
-            self._last_click = (0.0, x, y)
-
-        if not double:
+        if not self._is_double_click(x, y, double):
             self._clear_panel()
             return
-
         row = y - self.origin[1] - self.HEADER_ROWS
         col = x - self.origin[0]
         if self.too_small or not (0 <= row < self.body_h and 0 <= col < self.left_w):
@@ -576,7 +564,22 @@ class ConsoleReader:
         if index >= len(self.lines):
             self._clear_panel()
             return
-        picked = self._word_at(self.lines[index], col)
+        self._lookup_line(self.lines[index], index, col)
+
+    def _is_double_click(self, x, y, double):
+        now = time.monotonic()
+        if double:
+            self._last_click = (0.0, x, y)
+            return True
+        last_time, last_x, last_y = self._last_click
+        if (now - last_time <= 0.5 and abs(x - last_x) <= 1 and abs(y - last_y) <= 1):
+            self._last_click = (0.0, x, y)
+            return True
+        self._last_click = (now, x, y)
+        return False
+
+    def _lookup_line(self, text, index, col):
+        picked = self._word_at(text, col)
         if not picked:
             self._clear_panel()
             return
@@ -796,7 +799,10 @@ class ConsoleReader:
             end -= 1
         if start >= end:
             return None
-        return line[start:end], start, end
+        word = line[start:end]
+        if not any("a" <= ch.lower() <= "z" for ch in word):
+            return None
+        return word, start, end
 
 
 def show_passage(title, body_text):

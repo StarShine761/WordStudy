@@ -228,17 +228,19 @@ class ExamReader(ConsoleReader):
     # ------------------------------------------------------------ 鼠标
 
     def _click(self, x, y, double):
+        if not self._is_double_click(x, y, double):
+            self._clear_panel()
+            return
         row = y - self.origin[1] - self.HEADER_ROWS
         col = x - self.origin[0]
-        index = self.top + row
-        in_passage = (not self.too_small and 0 <= row < self.body_h
-                      and 0 <= col < self.left_w and index < self.passage_n)
-        if in_passage:
-            super()._click(x, y, double)
-        else:
-            if not double:
-                self._last_click = (0.0, x, y)
+        if self.too_small or not (0 <= row < self.body_h and 0 <= col < self.left_w):
             self._clear_panel()
+            return
+        index = self.top + row
+        if index >= len(self.doc):
+            self._clear_panel()
+            return
+        self._lookup_line(self.doc[index][0], index, col)
 
     def _wheel(self, step, x, y):
         if x - self.origin[0] >= self.left_w + self.gap_w + 1:
@@ -292,7 +294,7 @@ class ExamReader(ConsoleReader):
                     fit("请放大终端后继续，Ctrl+C 退出", self.width, S_GREY)]
         rows = [
             fit(self.title, self.width, S_CYAN),
-            fit("双击原文查词 | 滚轮/方向键滚动 | Tab 跳到当前题 | 输入答案回车提交 | Ctrl+C 退出",
+            fit("双击任意文字查词 | 滚轮/方向键滚动 | Tab 跳到当前题 | 输入答案回车提交 | Ctrl+C 退出",
                 self.width, S_GREY),
         ]
         for i in range(self.body_h):
@@ -306,11 +308,11 @@ class ExamReader(ConsoleReader):
 
     def _render_doc_line(self, text, style, index):
         w = max(1, self.left_w)
-        if index < self.passage_n and self.sel and self.sel[0] == index:
-            line = self.lines[index]
+        if self.sel and self.sel[0] == index:
             _, start, end = self.sel
-            body = line[:start] + S_REV + line[start:end] + S_RESET + line[end:]
-            return body + " " * max(0, w - disp_width(line))
+            body = ((style or "") + text[:start] + S_REV + text[start:end] + S_RESET
+                    + (style or "") + text[end:])
+            return body + " " * max(0, w - disp_width(text))
         text = clip_display(text, w)
         pad = " " * max(0, w - disp_width(text))
         return f"{style}{text}{pad}{S_RESET}" if style else text + pad
