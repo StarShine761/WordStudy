@@ -196,6 +196,7 @@ def fit(text, width, style=""):
 
 class Dictionary:
     NEGATIVE_TTL = 60.0
+    ERROR_TTL = 5.0
 
     def __init__(self, path=DICT_PATH):
         self.path = path
@@ -255,9 +256,11 @@ class Dictionary:
         if cached:
             if cached["entry"] is not None:
                 return cached["entry"]
-            if time.monotonic() - cached["stamp"] < self.NEGATIVE_TTL:
-                if cached["error"]:
+            elapsed = time.monotonic() - cached["stamp"]
+            if cached["error"]:
+                if elapsed < self.ERROR_TTL:
                     raise OnlineLookupError(cached["error"])
+            elif elapsed < self.NEGATIVE_TTL:
                 return None
 
         try:
@@ -266,14 +269,24 @@ class Dictionary:
             self.online_cache[key] = {
                 "entry": None, "stamp": time.monotonic(), "error": str(exc)}
             raise
+        stored_word = word
+        if entry is None:
+            # 所有格/复数等变形词有道未必收录，拿原形再查一次
+            for candidate in self._candidates(word):
+                if candidate.lower() == key:
+                    continue
+                entry = fetch_online(candidate)
+                if entry:
+                    stored_word = candidate
+                    break
         if entry is None:
             self.online_cache[key] = {
                 "entry": None, "stamp": time.monotonic(), "error": ""}
             return None
 
-        entry["word"] = word
+        entry["word"] = stored_word
         try:
-            self._save_entry(word, entry)
+            self._save_entry(stored_word, entry)
             entry["stored"] = True
         except sqlite3.Error:
             # 词库被其他进程占用时仍然显示联网释义
@@ -584,9 +597,9 @@ class ConsoleReader:
         self._draw()
         try:
             entry = self.dictionary.fetch_and_store(word)
-        except OnlineLookupError:
+        except OnlineLookupError as exc:
             entry = None
-            self.panel_status = "联网查询失败，请检查网络后重试"
+            self.panel_status = f"联网查询失败（{exc}），请稍后重试"
         else:
             if entry:
                 self.panel_entry = entry
