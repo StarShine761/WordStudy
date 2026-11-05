@@ -74,11 +74,11 @@ class ReadingPractice:
             "SELECT name FROM sqlite_master WHERE type='table' AND name='reading_passage'"
         ).fetchone()
         if not row:
-            print("\n⚠️ 还没有雅思阅读题库。")
+            print("\n还没有雅思阅读题库。")
             print("   请先运行: python import_reading.py")
             return False
         if not self.conn.execute("SELECT 1 FROM reading_passage LIMIT 1").fetchone():
-            print("\n⚠️ 阅读题库为空，请先运行: python import_reading.py")
+            print("\n阅读题库为空，请先运行: python import_reading.py")
             return False
         return True
 
@@ -89,16 +89,16 @@ class ReadingPractice:
             return
         while True:
             print("\n" + "=" * 60)
-            print("📖 雅思阅读训练")
+            print("雅思阅读训练")
             print("=" * 60)
             passages, questions, attempts, wrongs = self._counts()
             print(f"题库: {passages} 篇 / {questions} 题 | 已练 {attempts} 套 | 错题 {wrongs} 道")
             print("-" * 60)
-            print("1. 📚 按 P1 / P2 / P3 选套题")
-            print("2. 🎲 随机一套")
-            print("3. 🔥 高频优先随机")
-            print("4. 🩹 错题重练")
-            print("5. 📊 练习记录")
+            print("1. 按 P1 / P2 / P3 选套题")
+            print("2. 随机一套")
+            print("3. 高频优先随机")
+            print("4. 错题重练")
+            print("5. 练习记录")
             print("0. 返回主菜单")
             print("=" * 60)
             choice = input("请选择 (0-5): ").strip()
@@ -116,9 +116,9 @@ class ReadingPractice:
                 elif choice == "5":
                     self._show_stats()
                 else:
-                    print("❌ 无效选择")
+                    print("无效选择")
             except KeyboardInterrupt:
-                print("\n↩️ 已返回阅读菜单")
+                print("\n已返回阅读菜单")
 
     def _counts(self):
         c = self.conn
@@ -131,7 +131,7 @@ class ReadingPractice:
     def _choose_category(self):
         while True:
             print("\n" + "=" * 60)
-            print("📚 选择套题类型")
+            print("选择套题类型")
             print("=" * 60)
             print("1. P1 (Passage 1, 较易)")
             print("2. P2 (Passage 2, 中等)")
@@ -157,13 +157,13 @@ class ReadingPractice:
             (category,),
         ).fetchall()
         if not rows:
-            print(f"❌ 没有 {category} 套题")
+            print(f"没有 {category} 套题")
             return
         page, per = 0, 12
         pages = math.ceil(len(rows) / per)
         while True:
             print("\n" + "=" * 60)
-            print(f"📚 {category} 套题（共 {len(rows)} 篇）  第 {page + 1}/{pages} 页")
+            print(f"{category} 套题（共 {len(rows)} 篇）  第 {page + 1}/{pages} 页")
             print("=" * 60)
             start = page * per
             for i, r in enumerate(rows[start:start + per], start=start + 1):
@@ -185,13 +185,13 @@ class ReadingPractice:
                 page = max(page - 1, 0)
                 continue
             if not choice.isdigit():
-                print("❌ 无效输入")
+                print("无效输入")
                 continue
             index = int(choice) - 1
             if 0 <= index < len(rows):
                 self._practice_passage(rows[index]["id"])
             else:
-                print("❌ 编号超出范围")
+                print("编号超出范围")
 
     def _practice_random(self, frequency=None):
         sql = "SELECT id, title FROM reading_passage"
@@ -202,9 +202,9 @@ class ReadingPractice:
         sql += " ORDER BY RANDOM() LIMIT 1"
         row = self.conn.execute(sql, params).fetchone()
         if not row:
-            print("❌ 题库为空")
+            print("题库为空")
             return
-        print(f"\n🎲 抽到: {row['title']}")
+        print(f"\n抽到: {row['title']}")
         self._practice_passage(row["id"])
 
     # ------------------------------------------------------------ 练习
@@ -214,7 +214,7 @@ class ReadingPractice:
             "SELECT * FROM reading_passage WHERE id = ?", (passage_id,)
         ).fetchone()
         if not p:
-            print("❌ 找不到这篇阅读")
+            print("找不到这篇阅读")
             return
         groups = self.conn.execute(
             "SELECT * FROM reading_group WHERE passage_id = ? ORDER BY seq", (passage_id,)
@@ -231,17 +231,17 @@ class ReadingPractice:
             if qs:
                 plan.append((g, qs))
         if not plan:
-            print("❌ 这篇没有可练的题目")
+            print("这篇没有可练的题目")
             return
         total = sum(len(qs) for _, qs in plan)
 
         print("\n" + "=" * 60)
-        print(f"📄 {p['title']}")
+        print(f"{p['title']}")
         print(f"类型: {p['category']} · {FREQ_NAMES.get(p['frequency'], p['frequency'])} | "
               f"本次 {total} 题 | 来源: GPL-3.0 公开题库")
         print("=" * 60)
         if only_question_ids is not None:
-            print("🩹 错题重练模式：只考错过的题")
+            print("错题重练模式：只考错过的题")
         width = max(40, shutil.get_terminal_size((100, 30)).columns)
         session = ExamSession(self, p, plan)
         try:
@@ -256,7 +256,7 @@ class ReadingPractice:
                 if session.answered:
                     session.report()
                     return
-                print("⚠️ 无法打开全屏答题界面，改用普通模式")
+                print("无法打开全屏答题界面，改用普通模式")
             else:
                 session.report()
                 return
@@ -309,14 +309,14 @@ class ReadingPractice:
         }
 
     def _print_passage(self, body_text, width):
-        print(f"\n{C_TITLE}📖 原文{C_RESET}")
+        print(f"\n{C_TITLE}原文{C_RESET}")
         print("-" * 60)
         for line in wrap_text(body_text or "（原文为空）", width=width, indent=""):
             print(line)
 
     def _print_exam(self, plan, width):
         total = sum(len(qs) for _, qs in plan)
-        print(f"\n{C_TITLE}📝 题目（共 {total} 题）{C_RESET}")
+        print(f"\n{C_TITLE}题目（共 {total} 题）{C_RESET}")
         print("-" * 60)
         for group, questions in plan:
             span = self._number_span([str(q["display_number"]) for q in questions])
@@ -456,7 +456,7 @@ class ReadingPractice:
         quit_session = False
         index = 0
 
-        print(f"\n{C_HEAD}✍️ 开始作答（q 退出，直接回车跳过）{C_RESET}")
+        print(f"\n{C_HEAD}开始作答（q 退出，直接回车跳过）{C_RESET}")
         for group, questions in plan:
             if quit_session:
                 break
@@ -511,9 +511,9 @@ class ReadingPractice:
                         "answer": " ".join(letters),
                         "answers": expected_all,
                     })
-                    print(f"{C_ERR}  ❌ 错误，正确答案: {' / '.join(expected_all)}{C_RESET}")
+                    print(f"{C_ERR}  错误，正确答案: {' / '.join(expected_all)}{C_RESET}")
                 elif graded:
-                    print(f"{C_OK}  ✅ 正确{C_RESET}")
+                    print(f"{C_OK}  正确{C_RESET}")
                 else:
                     print(f"{C_NOTE}  本题缺少标准答案，跳过判分{C_RESET}")
                 self.conn.commit()
@@ -550,7 +550,7 @@ class ReadingPractice:
                 if ok:
                     correct += 1
                     self.conn.execute("DELETE FROM reading_wrong WHERE question_id = ?", (q["id"],))
-                    print(f"{C_OK}  ✅ 正确{C_RESET}")
+                    print(f"{C_OK}  正确{C_RESET}")
                 else:
                     wrong_items.append({
                         "num": q["display_number"],
@@ -559,7 +559,7 @@ class ReadingPractice:
                         "answers": answers,
                     })
                     self._record_wrong(q, answer)
-                    print(f"{C_ERR}  ❌ 错误，正确答案: {' / '.join(answers)}{C_RESET}")
+                    print(f"{C_ERR}  错误，正确答案: {' / '.join(answers)}{C_RESET}")
                 self.conn.commit()
 
         finished = datetime.now().isoformat(timespec="seconds")
@@ -574,20 +574,20 @@ class ReadingPractice:
 
         print("\n" + "=" * 60)
         if answered:
-            print(f"🏁 本次成绩: {correct}/{answered}  正确率 {score * 100:.0f}%")
+            print(f"本次成绩: {correct}/{answered}  正确率 {score * 100:.0f}%")
         else:
-            print("🏁 本次没有作答")
+            print("本次没有作答")
         if wrong_items:
-            print(f"\n❌ 错题回顾（{len(wrong_items)} 题）:")
+            print(f"\n错题回顾（{len(wrong_items)} 题）:")
             for item in wrong_items:
                 print(f"\n  第 {item['num']} 题:")
                 for line in wrap_text(item["prompt"], width=WIDTH, indent="    "):
                     print(line)
                 print(f"    你的答案: {item['answer'] or '(空)'}    "
                       f"正确答案: {' / '.join(item['answers'])}")
-            print(f"\n{C_NOTE}💡 这些题已加入错题本，可从“错题重练”再次练习{C_RESET}")
+            print(f"\n{C_NOTE}这些题已加入错题本，可从“错题重练”再次练习{C_RESET}")
         else:
-            print("🎉 全部答对！")
+            print("全部答对！")
         print("=" * 60)
         input("回车返回...")
 
@@ -648,11 +648,11 @@ class ReadingPractice:
             """
         ).fetchall()
         if not rows:
-            print("\n🎉 错题本是空的")
+            print("\n错题本是空的")
             return
         while True:
             print("\n" + "=" * 60)
-            print(f"🩹 错题本（{len(rows)} 篇）")
+            print(f"错题本（{len(rows)} 篇）")
             print("=" * 60)
             for i, r in enumerate(rows, start=1):
                 title = r["title"] if len(r["title"]) <= 42 else r["title"][:40] + "…"
@@ -663,7 +663,7 @@ class ReadingPractice:
             if choice == "0":
                 return
             if not choice.isdigit():
-                print("❌ 无效输入")
+                print("无效输入")
                 continue
             idx = int(choice) - 1
             if 0 <= idx < len(rows):
@@ -672,7 +672,7 @@ class ReadingPractice:
                     "SELECT question_id FROM reading_wrong WHERE passage_id = ?", (pid,))}
                 self._practice_passage(pid, ids)
                 return
-            print("❌ 编号超出范围")
+            print("编号超出范围")
 
     def _show_stats(self):
         row = self.conn.execute(
@@ -680,7 +680,7 @@ class ReadingPractice:
             "COALESCE(SUM(total), 0) AS t, COALESCE(AVG(score), 0) AS avg FROM reading_attempt"
         ).fetchone()
         print("\n" + "=" * 60)
-        print("📊 阅读练习记录")
+        print("阅读练习记录")
         print("=" * 60)
         print(f"累计完成 {row['n']} 套 | 答题 {row['t']} 道 | 正确 {row['c']} 道 | "
               f"平均正确率 {row['avg'] * 100:.0f}%")
@@ -712,7 +712,7 @@ class ReadingPractice:
                 prompt = r["prompt"] if len(r["prompt"]) <= 60 else r["prompt"][:58] + "…"
                 print(f"  ×{r['wrong_count']}  {prompt}  ({r['title'][:24]})")
         else:
-            print("\n🎉 错题本是空的")
+            print("\n错题本是空的")
         input("\n回车返回...")
 
 
@@ -788,7 +788,7 @@ class ExamSession:
             self.correct += 1
             self._erase_wrong(question)
             block["state"] = "ok"
-            return "✅ 正确"
+            return "正确"
         block["state"] = "bad"
         self.wrong_items.append({
             "num": question["display_number"],
@@ -797,7 +797,7 @@ class ExamSession:
             "answers": answers,
         })
         self.p._record_wrong(question, answer)
-        return f"❌ 错误，正确答案: {' / '.join(answers)}"
+        return f"错误，正确答案: {' / '.join(answers)}"
 
     def _submit_multi(self, block, text):
         letters = [x.upper() for x in re.findall(r"[A-Za-z]+", text)]
@@ -827,7 +827,7 @@ class ExamSession:
             return "本题缺少标准答案，已跳过"
         if not block_wrong:
             block["state"] = "ok"
-            return "✅ 正确"
+            return "正确"
         block["state"] = "bad"
         self.wrong_items.append({
             "num": (f"{block['questions'][0]['display_number']}-"
@@ -836,7 +836,7 @@ class ExamSession:
             "answer": " ".join(letters),
             "answers": expected_all,
         })
-        return f"❌ 错误，正确答案: {' / '.join(expected_all)}"
+        return f"错误，正确答案: {' / '.join(expected_all)}"
 
     def skip(self):
         if self.finished:
@@ -873,20 +873,20 @@ class ExamSession:
     def report(self):
         print("\n" + "=" * 60)
         if self.answered:
-            print(f"🏁 本次成绩: {self.correct}/{self.answered}  正确率 {self.score * 100:.0f}%")
+            print(f"本次成绩: {self.correct}/{self.answered}  正确率 {self.score * 100:.0f}%")
         else:
-            print("🏁 本次没有作答")
+            print("本次没有作答")
         if self.wrong_items:
-            print(f"\n❌ 错题回顾（{len(self.wrong_items)} 题）:")
+            print(f"\n错题回顾（{len(self.wrong_items)} 题）:")
             for item in self.wrong_items:
                 print(f"\n  第 {item['num']} 题:")
                 for line in wrap_text(item["prompt"], width=WIDTH, indent="    "):
                     print(line)
                 print(f"    你的答案: {item['answer'] or '(空)'}    "
                       f"正确答案: {' / '.join(item['answers'])}")
-            print(f"\n{C_NOTE}💡 这些题已加入错题本，可从“错题重练”再次练习{C_RESET}")
+            print(f"\n{C_NOTE}这些题已加入错题本，可从“错题重练”再次练习{C_RESET}")
         elif self.answered:
-            print("🎉 全部答对！")
+            print("全部答对！")
         print("=" * 60)
         input("回车返回...")
 

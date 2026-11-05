@@ -96,13 +96,13 @@ class ExamReader(ConsoleReader):
         state = block["state"]
         status = ""
         if state == "ok":
-            status = f"   ✓ 你:{block['user']}"
+            status = f"   正确 你:{block['user']}"
         elif state == "bad":
-            status = (f"   ✗ 你:{block['user'] or '-'} "
+            status = (f"   错误 你:{block['user'] or '-'} "
                       f"正确:{'/'.join(block['expected']) or '-'}")
         elif state == "skip":
-            status = "   – 跳过"
-        head = f"{'▶' if current else '·'} {block['kind_label']} 第 {block['span']} 题{status}"
+            status = "   跳过"
+        head = f"{block['kind_label']} 第 {block['span']} 题{status}"
         if current:
             head_style = S_REV
         else:
@@ -133,7 +133,7 @@ class ExamReader(ConsoleReader):
     def _summary_lines(self):
         s = self.session
         w = max(1, self.left_w)
-        lines = [(clip_display(f"🏁 成绩 {s.correct}/{s.answered} "
+        lines = [(clip_display(f"成绩 {s.correct}/{s.answered} "
                                f"{s.score * 100:.0f}%", w), S_YELLOW), ("", "")]
         if s.wrong_items:
             lines.append(("错题:", S_RED))
@@ -142,7 +142,7 @@ class ExamReader(ConsoleReader):
                 lines.extend((ln, "") for ln in wrap_display(
                     f"你:{item['answer'] or '(空)'} 正确:{' / '.join(item['answers'])}", w))
         else:
-            lines.append(("全部答对 🎉", S_GREEN))
+            lines.append(("全部答对", S_GREEN))
         lines.extend([("", ""), ("回车/q 返回，可继续滚动查看", S_GREY)])
         return lines
 
@@ -273,7 +273,7 @@ class ExamReader(ConsoleReader):
 
     def _footer(self):
         if self.finished:
-            text = (f"🏁 完成 {self.session.correct}/{self.session.answered} "
+            text = (f"完成 {self.session.correct}/{self.session.answered} "
                     f"{self.session.score * 100:.0f}%   [回车/q 返回] 可滚动查看")
             return fit(text, self.width, S_YELLOW)
         s = self.session

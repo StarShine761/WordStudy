@@ -12,18 +12,26 @@ class ChoicePromptTests(unittest.TestCase):
     def test_prompt_retries_until_valid_choice(self):
         app = WordStudyApp.__new__(WordStudyApp)
 
-        with patch('builtins.input', side_effect=['invalid', '5']):
+        with patch('builtins.input', side_effect=['invalid', '4']):
             choice = app._prompt_choice()
 
-        self.assertEqual(choice, '5')
+        self.assertEqual(choice, '4')
 
-    def test_prompt_rejects_six_and_accepts_three(self):
+    def test_prompt_rejects_five_and_six_and_accepts_three(self):
         app = WordStudyApp.__new__(WordStudyApp)
 
-        with patch('builtins.input', side_effect=['6', '3']):
+        with patch('builtins.input', side_effect=['5', '6', '3']):
             choice = app._prompt_choice()
 
         self.assertEqual(choice, '3')
+
+    def test_replay_prompt_rejects_five(self):
+        app = WordStudyApp.__new__(WordStudyApp)
+
+        with patch('builtins.input', side_effect=['5', '9']):
+            choice = app._prompt_choice_with_replay()
+
+        self.assertEqual(choice, '9')
 
 
 class QuizOptionTests(unittest.TestCase):
@@ -65,9 +73,29 @@ class QuizOptionTests(unittest.TestCase):
             self.assertEqual(result['correct_text'], text)
             self.assertTrue(self.build_kwargs['include_correct'])
 
-    def test_five_is_always_wrong(self):
-        for slot in (1, 2, 3, 4):
-            self.assertFalse(self._answer('5', correct_slot=slot)['correct'])
+    def test_five_is_no_longer_a_valid_choice(self):
+        # 第 5 个选项已移除：输入 5 会提示无效，直到输入 1-4 才作答
+        with patch.object(self.app, 'build_quiz_options', side_effect=self._build), \
+                patch('word_study.random.randint', return_value=1), \
+                patch('builtins.input', side_effect=['5', '1']):
+            result = self.app._ask_quiz(self.word, 'interpretation')
+
+        self.assertTrue(result['correct'])
+
+    def test_four_options_and_prompt_spacing(self):
+        with patch.object(self.app, 'build_quiz_options', side_effect=self._build), \
+                patch('word_study.random.randint', return_value=1), \
+                patch('builtins.print') as printed, \
+                patch('builtins.input', return_value='1') as mocked_input:
+            self.app._ask_quiz(self.word, 'interpretation')
+
+        lines = [call.args[0] if call.args else '' for call in printed.call_args_list]
+        self.assertIn('  4. 以上三个都不对', lines)
+        self.assertNotIn('  5. 不确定', lines)
+        # 选项 4 后只有一个空行，和每个选项之间的间距一致
+        self.assertEqual(lines[lines.index('  4. 以上三个都不对') + 1], '')
+        # 提示本身不再额外插入空行
+        self.assertFalse(mocked_input.call_args.args[0].startswith('\n'))
 
     def test_slot_four_wrong_options_score_zero(self):
         for choice in ('1', '2', '3'):

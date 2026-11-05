@@ -261,7 +261,7 @@ class WordStudyApp:
             with open(self.config_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"⚠️ 保存设置失败: {e}")
+            print(f"保存设置失败: {e}")
 
     def load_study_count(self):
         """加载每次学习单词数量"""
@@ -332,9 +332,9 @@ class WordStudyApp:
             self.tts_speed = config.get('tts_speed', 1.0)
             percent = round((self.tts_speed - 1.0) * 100)
             self.tts_rate = f"{percent:+d}%"
-            print(f"✅ Edge TTS 初始化成功（语速: {self.tts_speed}x）")
+            print(f"Edge TTS 初始化成功（语速: {self.tts_speed}x）")
         except Exception as e:
-            print(f"⚠️ Edge TTS 初始化失败: {e}")
+            print(f"Edge TTS 初始化失败: {e}")
 
         self._check_output_device()
 
@@ -342,13 +342,13 @@ class WordStudyApp:
         """启动时确认存在可用的播放设备，避免无声且无提示"""
         if sys.platform != 'win32':
             self.tts_voice = None
-            print("⚠️ 音频播放仅支持 Windows（当前系统无法发音）")
+            print("音频播放仅支持 Windows（当前系统无法发音）")
             return
         try:
             if _winmm.waveOutGetNumDevs() == 0:
                 self._warn_tts(
                     "output",
-                    "⚠️ 未检测到可用的音频输出设备（耳机/音箱未连接或被禁用），"
+                    "未检测到可用的音频输出设备（耳机/音箱未连接或被禁用），"
                     "发音将没有声音；接上设备后重启本程序"
                 )
         except Exception:
@@ -513,12 +513,12 @@ class WordStudyApp:
             try:
                 path = self._ensure_cached(text, voice)
             except Exception as e:
-                self._warn_tts("synth", f"⚠️ 发音合成失败（检查网络或升级 edge-tts）: {e}")
+                self._warn_tts("synth", f"发音合成失败（检查网络或升级 edge-tts）: {e}")
                 return
             try:
                 self._play_cached(path, seq)
             except Exception as e:
-                self._warn_tts("play", f"⚠️ 音频播放失败: {e}")
+                self._warn_tts("play", f"音频播放失败: {e}")
 
         threading.Thread(target=_run, daemon=True).start()
 
@@ -532,7 +532,7 @@ class WordStudyApp:
             path = self._ensure_cached(text, voice)
             self._play_cached(path, seq, interruptible=False)
         except Exception as e:
-            self._warn_tts("play", f"⚠️ 音频播放失败: {e}")
+            self._warn_tts("play", f"音频播放失败: {e}")
     
     def search_words(self, keyword: str, limit: int = 20) -> List[Dict]:
         """智能搜索单词：优先全匹配，然后前缀匹配，最后模糊匹配"""
@@ -690,11 +690,11 @@ class WordStudyApp:
         """打印无词提示，返回学习列表总数"""
         total = self.get_session_stats()['total']
         if total == 0:
-            print("❌ 学习列表还是空的，暂时没有单词可学")
-            print("💡 先用「7. 搜索并添加单词」把想学的词加入学习列表")
+            print("学习列表还是空的，暂时没有单词可学")
+            print("先用「7. 搜索并添加单词」把想学的词加入学习列表")
             return 0
-        print(f"❌ 今天没有到期单词，也没有可学的新词（待{action}）")
-        print("💡 到期复习会按 FSRS 计划出现；现在可以用「10. 自由练习」巩固已学单词，"
+        print(f"今天没有到期单词，也没有可学的新词（待{action}）")
+        print("到期复习会按 FSRS 计划出现；现在可以用「10. 自由练习」巩固已学单词，"
               "或用「7. 搜索并添加单词」添加新词")
         return total
 
@@ -708,7 +708,7 @@ class WordStudyApp:
             self.interactive_search()
             words = self.get_today_study_words(self.study_count)
             if words:
-                print("\n✅ 已把新词加入本次学习队列")
+                print("\n已把新词加入本次学习队列")
                 return words, False
             return [], False
         choice = input(
@@ -718,9 +718,9 @@ class WordStudyApp:
             return [], False
         words = self.get_practice_words(self.study_count)
         if not words:
-            print("❌ 学习列表里没有可用单词")
+            print("学习列表里没有可用单词")
             return [], False
-        print("\n🎯 已进入自由练习（本次作答不影响复习计划）")
+        print("\n已进入自由练习（本次作答不影响复习计划）")
         return words, True
 
     def is_card_due(self, voc_id: str) -> bool:
@@ -852,12 +852,12 @@ class WordStudyApp:
         if not correct:
             self.add_to_wrong_words(voc_id)
         if result and result.get('is_leech') and not was_leech:
-            print("⚠️ 该词已标记为顽固单词，建议用「自由练习」反复巩固")
+            print("该词已标记为顽固单词，建议用「自由练习」反复巩固")
         return result
 
     def _ask_quiz(self, word: Dict, kind: str = 'interpretation',
                   allow_replay: bool = False, reveal_word: bool = False):
-        """正确项在 1-4 中随机（4=以上三个都不对），5 恒判错；返回 None 表示用户选择返回"""
+        """正确项在 1-4 中随机（4=以上三个都不对）；返回 None 表示用户选择返回"""
         correct_slot = random.randint(1, 4)
         options = self.build_quiz_options(
             word, kind, include_correct=correct_slot != 4
@@ -882,8 +882,6 @@ class WordStudyApp:
                 correct_label = label
                 correct_text = text
         print("  4. 以上三个都不对")
-        print()
-        print("  5. 不确定")
         print()
         if correct_slot == 4:
             detail_label = (
@@ -920,9 +918,11 @@ class WordStudyApp:
                 ))
 
         hint = False
+        # 选项 4 后已留一个空行，这里不再额外加空行，
+        # 让「请选择」与上方内容的间距和每个选项之间的间距一致
         prompt = (
-            "\n请选择 (1/2/3/4/5, 9=重新播放, 0=返回): "
-            if allow_replay else "\n请选择 (1/2/3/4/5/0): "
+            "请选择 (1/2/3/4, 9=重新播放, 0=返回): "
+            if allow_replay else "请选择 (1/2/3/4/0): "
         )
         while True:
             if allow_replay:
@@ -933,20 +933,18 @@ class WordStudyApp:
             if choice == '0':
                 return None
             if choice == '9' and allow_replay:
-                print("🔊 重新播放...")
+                print("重新播放...")
                 self.speak_sync(word['vocabulary'])
                 hint = True
                 continue
 
             correct = choice == correct_label
             if reveal_word:
-                print(f"\n📝 单词: \033[1;33m{word.get('vocabulary', '')}\033[0m")
+                print(f"\n单词: \033[1;33m{word.get('vocabulary', '')}\033[0m")
             if correct:
-                print_answer("✅ 正确! 答案: ")
-            elif choice == '5':
-                print_answer("❌ 选择「不确定」视为答错! 正确答案是: ")
+                print_answer("正确! 答案: ")
             else:
-                print_answer("❌ 错误! 正确答案是: ")
+                print_answer("错误! 正确答案是: ")
             return {
                 'correct': correct,
                 'correct_label': correct_label,
@@ -954,42 +952,33 @@ class WordStudyApp:
                 'hint': hint,
             }
     
-    def _prompt_choice(self, prompt: str = "\n请选择 (1/2/3/4/5/0): ") -> str:
-        """读取并校验选择题输入，接受 1-5 以及 0（返回主菜单）"""
-        valid = {'1', '2', '3', '4', '5', '0'}
+    def _prompt_choice(self, prompt: str = "请选择 (1/2/3/4/0): ") -> str:
+        """读取并校验选择题输入，接受 1-4 以及 0（返回主菜单）"""
+        valid = {'1', '2', '3', '4', '0'}
         while True:
             user_choice = input(prompt).strip()
             if user_choice in valid:
                 return user_choice
-            print("❌ 输入无效，请输入 1/2/3/4/5 中的一个数字，或输入 0 返回主菜单")
+            print("输入无效，请输入 1/2/3/4 中的一个数字，或输入 0 返回主菜单")
 
-    def _prompt_choice_with_replay(self, prompt: str = "\n请选择 (1/2/3/4/5, 9=重新播放, 0=返回): ") -> str:
-        """读取并校验选择题输入，接受 1-5、9（重新播放）以及 0（返回）"""
-        valid = {'1', '2', '3', '4', '5', '9', '0'}
+    def _prompt_choice_with_replay(self, prompt: str = "请选择 (1/2/3/4, 9=重新播放, 0=返回): ") -> str:
+        """读取并校验选择题输入，接受 1-4、9（重新播放）以及 0（返回）"""
+        valid = {'1', '2', '3', '4', '9', '0'}
         while True:
             user_choice = input(prompt).strip()
             if user_choice in valid:
                 return user_choice
-            print("❌ 输入无效，请输入 1/2/3/4/5 中的一个数字，或输入 9 重新播放，或输入 0 返回")
+            print("输入无效，请输入 1/2/3/4 中的一个数字，或输入 9 重新播放，或输入 0 返回")
     
-    def _word_tag(self, word: Dict, practice_mode: bool = False) -> str:
-        if practice_mode:
-            return " 🎯"
-        if word.get('is_new'):
-            return " 🆕"
-        if word.get('is_extra'):
-            return " 🧠"
-        return ""
-
     def _print_extra_hint(self, words: List[Dict]):
         extra = sum(1 for word in words if word.get('is_extra'))
         if extra:
-            print(f"🧠 其中 {extra} 个为巩固词：从今日已学的词中随机抽取")
+            print(f"提示：其中 {extra} 个为巩固词，从今日已学的词中随机抽取")
 
     def mode_english_to_chinese(self):
         """模式1: 看英文，选择中文（选择题模式）"""
         print("\n" + "="*60)
-        print("\033[1;32m📖 模式1: 看英文，选择中文\033[0m")
+        print("\033[1;32m模式1: 看英文，选择中文\033[0m")
         print("="*60)
         
         practice_mode = False
@@ -1005,15 +994,14 @@ class WordStudyApp:
         
         for idx, word in enumerate(study_words, 1):
             phonetic = word['phonetic_us'] or ''
-            tag = self._word_tag(word, practice_mode)
-            print(f"\n📝 {idx}/{total_count}. \033[1;33m{word['vocabulary']}\033[0m   {phonetic}{tag}")
+            print(f"\n{idx}/{total_count}. \033[1;33m{word['vocabulary']}\033[0m   {phonetic}")
             
             self.speak(word['vocabulary'])
             
             started = time.perf_counter()
             result = self._ask_quiz(word, 'interpretation')
             if result is None:
-                print("\n👋 返回主菜单")
+                print("\n返回主菜单")
                 return
             duration_ms = int((time.perf_counter() - started) * 1000)
             
@@ -1025,13 +1013,13 @@ class WordStudyApp:
                 correct_count += 1
         
         print(f"\n" + "="*60)
-        print(f"✅ 学习完成! 正确率: {correct_count}/{total_count}")
+        print(f"学习完成! 正确率: {correct_count}/{total_count}")
         print("="*60)
     
     def mode_chinese_to_english(self):
         """模式2: 看中文，选择英文（选择题模式）"""
         print("\n" + "="*60)
-        print("\033[1;32m📖 模式2: 看中文，选择英文\033[0m")
+        print("\033[1;32m模式2: 看中文，选择英文\033[0m")
         print("="*60)
         
         practice_mode = False
@@ -1046,15 +1034,14 @@ class WordStudyApp:
         total_count = len(review_words)
         
         for idx, word in enumerate(review_words, 1):
-            tag = self._word_tag(word, practice_mode)
-            print(f"\n❓ {idx}/{total_count}. \033[1;33m"
+            print(f"\n{idx}/{total_count}. \033[1;33m"
                   f"{format_meaning(word['interpretation'], cont_prefix='   ')}"
-                  f"\033[0m{tag}")
+                  f"\033[0m")
             
             started = time.perf_counter()
             result = self._ask_quiz(word, 'vocabulary')
             if result is None:
-                print("\n👋 返回主菜单")
+                print("\n返回主菜单")
                 return
             duration_ms = int((time.perf_counter() - started) * 1000)
             
@@ -1068,13 +1055,13 @@ class WordStudyApp:
             self.speak(word['vocabulary'])
         
         print(f"\n" + "="*60)
-        print(f"✅ 复习完成! 正确率: {correct_count}/{total_count}")
+        print(f"复习完成! 正确率: {correct_count}/{total_count}")
         print("="*60)
     
     def mode_chinese_to_spelling(self):
         """模式3: 看中文，拼写英文"""
         print("\n" + "="*60)
-        print("\033[1;32m📖 模式3: 看中文，拼写英文 (拼写模式)\033[0m")
+        print("\033[1;32m模式3: 看中文，拼写英文 (拼写模式)\033[0m")
         print("="*60)
         
         practice_mode = False
@@ -1089,10 +1076,9 @@ class WordStudyApp:
         total_count = len(review_words)
         
         for idx, word in enumerate(review_words, 1):
-            tag = self._word_tag(word, practice_mode)
-            print(f"\n📝 {idx}/{total_count}. \033[1;33m"
+            print(f"\n{idx}/{total_count}. \033[1;33m"
                   f"{format_meaning(word['interpretation'], cont_prefix='   ')}"
-                  f"\033[0m{tag}")
+                  f"\033[0m")
             print()
             
             started = time.perf_counter()
@@ -1100,31 +1086,31 @@ class WordStudyApp:
             duration_ms = int((time.perf_counter() - started) * 1000)
             
             if user_input == '0':
-                print("\n👋 返回主菜单")
+                print("\n返回主菜单")
                 return
             
             correct = user_input == word['vocabulary'].lower()
             if correct:
-                print("✅ 拼写正确!")
+                print("拼写正确!")
                 correct_count += 1
             else:
-                print(f"❌ 拼写错误! 正确答案是: {word['vocabulary']}")
+                print(f"拼写错误! 正确答案是: {word['vocabulary']}")
             
             self.record_review(word, correct, duration_ms, practice=practice_mode)
             
             self.speak(word['vocabulary'])
         
         print(f"\n" + "="*60)
-        print(f"✅ 拼写练习完成! 正确率: {correct_count}/{total_count}")
+        print(f"拼写练习完成! 正确率: {correct_count}/{total_count}")
         print("="*60)
     
     def mode_listen_to_chinese(self):
         """模式4: 听音选中（听发音，选择中文释义）"""
         print("\n" + "="*60)
-        print("\033[1;32m🎧 模式4: 听音选中\033[0m")
+        print("\033[1;32m模式4: 听音选中\033[0m")
         print("="*60)
-        print("💡 只播放单词发音，不显示单词，请根据发音选择正确的中文释义")
-        print("💡 输入 9 可重新播放发音")
+        print("只播放单词发音，不显示单词，请根据发音选择正确的中文释义")
+        print("输入 9 可重新播放发音")
         print("="*60)
         
         practice_mode = False
@@ -1139,7 +1125,7 @@ class WordStudyApp:
         total_count = len(study_words)
         
         for idx, word in enumerate(study_words, 1):
-            print(f"\n🔊 第 {idx}/{total_count} 题{self._word_tag(word, practice_mode)}")
+            print(f"\n第 {idx}/{total_count} 题")
             print("正在播放单词发音...")
             
             self.speak_sync(word['vocabulary'])
@@ -1149,7 +1135,7 @@ class WordStudyApp:
                 word, 'interpretation', allow_replay=True, reveal_word=True
             )
             if result is None:
-                print("\n👋 返回主菜单")
+                print("\n返回主菜单")
                 return
             duration_ms = int((time.perf_counter() - started) * 1000)
             
@@ -1161,7 +1147,7 @@ class WordStudyApp:
                 correct_count += 1
         
         print(f"\n" + "="*60)
-        print(f"✅ 学习完成! 正确率: {correct_count}/{total_count}")
+        print(f"学习完成! 正确率: {correct_count}/{total_count}")
         print("="*60)
     
     def add_to_wrong_words(self, voc_id: str):
@@ -1255,11 +1241,11 @@ class WordStudyApp:
         """查看今日易错单词"""
         words = self.get_today_wrong_words()
         if not words:
-            print("\n❌ 今天没有易错单词")
+            print("\n今天没有易错单词")
             return
         
         print("\n" + "="*60)
-        print("📝 今日易错单词")
+        print("今日易错单词")
         print("="*60)
         
         while True:
@@ -1285,22 +1271,22 @@ class WordStudyApp:
                     idx = int(choice) - 1
                     if 0 <= idx < len(words):
                         word = words[idx]
-                        print(f"\n🔊 播放: {word['vocabulary']}")
+                        print(f"\n播放: {word['vocabulary']}")
                         self.speak(word['vocabulary'])
                     else:
-                        print("❌ 无效编号")
+                        print("无效编号")
                 except ValueError:
-                    print("❌ 请输入有效的编号")
+                    print("请输入有效的编号")
     
     def view_all_wrong_words(self):
         """查看所有易错单词"""
         words = self.get_all_wrong_words()
         if not words:
-            print("\n❌ 没有易错单词")
+            print("\n没有易错单词")
             return
         
         print("\n" + "="*60)
-        print("📝 所有易错单词")
+        print("所有易错单词")
         print("="*60)
         
         while True:
@@ -1327,22 +1313,22 @@ class WordStudyApp:
                     idx = int(choice) - 1
                     if 0 <= idx < len(words):
                         word = words[idx]
-                        print(f"\n🔊 播放: {word['vocabulary']}")
+                        print(f"\n播放: {word['vocabulary']}")
                         self.speak(word['vocabulary'])
                     else:
-                        print("❌ 无效编号")
+                        print("无效编号")
                 except ValueError:
-                    print("❌ 请输入有效的编号")
+                    print("请输入有效的编号")
     
     def review_wrong_words(self, words: List[Dict]):
         """复习错题单词"""
         if not words:
-            print("❌ 没有要复习的错题")
+            print("没有要复习的错题")
             return
         
         while True:
             print("\n" + "="*60)
-            print("📖 错题复习模式")
+            print("错题复习模式")
             print("="*60)
             print("1. 看英选中")
             print("2. 看中选英")
@@ -1364,12 +1350,12 @@ class WordStudyApp:
             elif choice == '4':
                 self.mode_listen_to_chinese_with_words(words)
             else:
-                print("❌ 无效选择")
+                print("无效选择")
     
     def mode_english_to_chinese_with_words(self, words: List[Dict], practice=None):
         """指定单词列表的看英选中模式；practice=None 时按到期状态自动判断"""
         print("\n" + "="*60)
-        print("\033[1;32m📖 模式1: 看英选中\033[0m")
+        print("\033[1;32m模式1: 看英选中\033[0m")
         print("="*60)
         
         correct_count = 0
@@ -1381,14 +1367,14 @@ class WordStudyApp:
             do_schedule = (not practice) if practice is not None else self.is_card_due(word_id)
             
             phonetic = word['phonetic_us'] or ''
-            print(f"\n📝 {idx}/{total_count}. \033[1;33m{word['vocabulary']}\033[0m   {phonetic}")
+            print(f"\n{idx}/{total_count}. \033[1;33m{word['vocabulary']}\033[0m   {phonetic}")
             
             self.speak(word['vocabulary'])
             
             started = time.perf_counter()
             result = self._ask_quiz(word, 'interpretation')
             if result is None:
-                print("\n👋 返回")
+                print("\n返回")
                 return
             duration_ms = int((time.perf_counter() - started) * 1000)
             
@@ -1400,13 +1386,13 @@ class WordStudyApp:
                 correct_count += 1
         
         print(f"\n" + "="*60)
-        print(f"✅ 复习完成! 正确率: {correct_count}/{total_count}")
+        print(f"复习完成! 正确率: {correct_count}/{total_count}")
         print("="*60)
     
     def mode_chinese_to_english_with_words(self, words: List[Dict], practice=None):
         """指定单词列表的看中选英模式；practice=None 时按到期状态自动判断"""
         print("\n" + "="*60)
-        print("\033[1;32m📖 模式2: 看中选英\033[0m")
+        print("\033[1;32m模式2: 看中选英\033[0m")
         print("="*60)
         
         correct_count = 0
@@ -1417,14 +1403,14 @@ class WordStudyApp:
             word_id = word['vc_id']
             do_schedule = (not practice) if practice is not None else self.is_card_due(word_id)
             
-            print(f"\n❓ {idx}/{total_count}. \033[1;33m"
+            print(f"\n{idx}/{total_count}. \033[1;33m"
                   f"{format_meaning(word['interpretation'], cont_prefix='   ')}"
                   f"\033[0m")
             
             started = time.perf_counter()
             result = self._ask_quiz(word, 'vocabulary')
             if result is None:
-                print("\n👋 返回")
+                print("\n返回")
                 return
             duration_ms = int((time.perf_counter() - started) * 1000)
             
@@ -1438,13 +1424,13 @@ class WordStudyApp:
             self.speak(word['vocabulary'])
         
         print(f"\n" + "="*60)
-        print(f"✅ 复习完成! 正确率: {correct_count}/{total_count}")
+        print(f"复习完成! 正确率: {correct_count}/{total_count}")
         print("="*60)
     
     def mode_chinese_to_spelling_with_words(self, words: List[Dict], practice=None):
         """指定单词列表的看中拼写模式；practice=None 时按到期状态自动判断"""
         print("\n" + "="*60)
-        print("\033[1;32m📖 模式3: 看中拼写英\033[0m")
+        print("\033[1;32m模式3: 看中拼写英\033[0m")
         print("="*60)
         
         correct_count = 0
@@ -1455,7 +1441,7 @@ class WordStudyApp:
             word_id = word['vc_id']
             do_schedule = (not practice) if practice is not None else self.is_card_due(word_id)
             
-            print(f"\n📝 {idx}/{total_count}. \033[1;33m"
+            print(f"\n{idx}/{total_count}. \033[1;33m"
                   f"{format_meaning(word['interpretation'], cont_prefix='   ')}"
                   f"\033[0m")
             print()
@@ -1465,15 +1451,15 @@ class WordStudyApp:
             duration_ms = int((time.perf_counter() - started) * 1000)
             
             if user_input == '0':
-                print("\n👋 返回")
+                print("\n返回")
                 return
             
             correct = user_input == word['vocabulary'].lower()
             if correct:
-                print("✅ 拼写正确!")
+                print("拼写正确!")
                 correct_count += 1
             else:
-                print(f"❌ 拼写错误! 正确答案是: {word['vocabulary']}")
+                print(f"拼写错误! 正确答案是: {word['vocabulary']}")
             
             self.record_review(
                 word, correct, duration_ms, practice=not do_schedule
@@ -1482,16 +1468,16 @@ class WordStudyApp:
             self.speak(word['vocabulary'])
         
         print(f"\n" + "="*60)
-        print(f"✅ 拼写练习完成! 正确率: {correct_count}/{total_count}")
+        print(f"拼写练习完成! 正确率: {correct_count}/{total_count}")
         print("="*60)
     
     def mode_listen_to_chinese_with_words(self, words: List[Dict], practice=None):
         """指定单词列表的听音选中模式；practice=None 时按到期状态自动判断"""
         print("\n" + "="*60)
-        print("\033[1;32m🎧 模式4: 听音选中\033[0m")
+        print("\033[1;32m模式4: 听音选中\033[0m")
         print("="*60)
-        print("💡 只播放单词发音，不显示单词，请根据发音选择正确的中文释义")
-        print("💡 输入 9 可重新播放发音")
+        print("只播放单词发音，不显示单词，请根据发音选择正确的中文释义")
+        print("输入 9 可重新播放发音")
         print("="*60)
         
         correct_count = 0
@@ -1502,7 +1488,7 @@ class WordStudyApp:
             word_id = word['vc_id']
             do_schedule = (not practice) if practice is not None else self.is_card_due(word_id)
             
-            print(f"\n🔊 第 {idx}/{total_count} 题")
+            print(f"\n第 {idx}/{total_count} 题")
             print("正在播放单词发音...")
             
             self.speak_sync(word['vocabulary'])
@@ -1512,7 +1498,7 @@ class WordStudyApp:
                 word, 'interpretation', allow_replay=True, reveal_word=True
             )
             if result is None:
-                print("\n👋 返回")
+                print("\n返回")
                 return
             duration_ms = int((time.perf_counter() - started) * 1000)
             
@@ -1524,14 +1510,14 @@ class WordStudyApp:
                 correct_count += 1
         
         print(f"\n" + "="*60)
-        print(f"✅ 复习完成! 正确率: {correct_count}/{total_count}")
+        print(f"复习完成! 正确率: {correct_count}/{total_count}")
         print("="*60)
     
     def wrong_words_menu(self):
         """错题本主菜单"""
         while True:
             print("\n" + "="*60)
-            print("📚 错题本")
+            print("错题本")
             print("="*60)
             print("1. 查看今日易错单词")
             print("2. 查看所有易错单词")
@@ -1547,7 +1533,7 @@ class WordStudyApp:
             elif choice == '2':
                 self.view_all_wrong_words()
             else:
-                print("❌ 无效选择")
+                print("无效选择")
     
     def _is_valid_phrase(self, text: str) -> bool:
         """检查例句是否有效（过滤乱码和Base64数据）"""
@@ -1621,7 +1607,7 @@ class WordStudyApp:
     def play_today_words(self):
         """播放今日复习单词及例句"""
         print("\n" + "="*60)
-        print("\033[1;32m🔊 播放今日复习单词及例句\033[0m")
+        print("\033[1;32m播放今日复习单词及例句\033[0m")
         print("="*60)
         print("按 Ctrl+C 退出播放")
         print("="*60)
@@ -1660,13 +1646,13 @@ class WordStudyApp:
                 print("\n--- 循环播放，按 Ctrl+C 退出 ---")
                 
         except KeyboardInterrupt:
-            print("\n\n👋 退出播放")
+            print("\n\n退出播放")
     
     def view_today_phrases(self):
         """今日例句功能"""
         while True:
             print("\n" + "="*60)
-            print("📖 今日例句")
+            print("今日例句")
             print("="*60)
             print("1. 导入今日例句")
             print("2. 循环展示播放例句")
@@ -1685,12 +1671,12 @@ class WordStudyApp:
             elif choice == '3':
                 self.set_playback_speed()
             else:
-                print("❌ 无效选择")
+                print("无效选择")
     
     def set_playback_speed(self):
         """设置语音播放速度（持久保存）"""
         print("\n" + "="*60)
-        print("⚡ 设置播放速度")
+        print("设置播放速度")
         print("="*60)
         print(f"当前速度: {self.tts_speed}x")
         print("提示: 0.5-2.0 之间的数值，1.0为正常速度")
@@ -1706,7 +1692,7 @@ class WordStudyApp:
                 speed = float(speed_input)
                 
                 if speed < 0.5 or speed > 2.0:
-                    print("❌ 速度范围必须在 0.5-2.0 之间")
+                    print("速度范围必须在 0.5-2.0 之间")
                     continue
                 
                 # 计算Edge TTS格式的语速
@@ -1727,17 +1713,17 @@ class WordStudyApp:
                 with open(self.config_path, 'w', encoding='utf-8') as f:
                     json.dump(config, f, ensure_ascii=False, indent=2)
                 
-                print(f"✅ 播放速度已设置为 {speed}x ({self.tts_rate})")
-                print("💾 设置已保存，下次启动时自动生效")
+                print(f"播放速度已设置为 {speed}x ({self.tts_rate})")
+                print("设置已保存，下次启动时自动生效")
                 break
                 
             except ValueError:
-                print("❌ 请输入有效的数字")
+                print("请输入有效的数字")
     
     def import_today_phrases(self):
         """导入今日例句（支持手动输入和PDF导入）"""
         print("\n" + "="*60)
-        print("📥 导入例句")
+        print("导入例句")
         print("="*60)
         print("1. 手动输入例句")
         print("2. 从PDF文件导入")
@@ -1753,12 +1739,12 @@ class WordStudyApp:
         elif choice == '2':
             self._import_phrases_from_pdf()
         else:
-            print("❌ 无效选择")
+            print("无效选择")
     
     def _import_phrases_manual(self):
         """手动输入例句"""
         print("\n" + "="*60)
-        print("📝 手动输入例句")
+        print("手动输入例句")
         print("="*60)
         print("输入0返回上一级")
         print("="*60)
@@ -1774,7 +1760,7 @@ class WordStudyApp:
                     break
                 
                 if not english:
-                    print("❌ 请输入英语例句")
+                    print("请输入英语例句")
                     continue
                 
                 chinese = input("输入中文释义: ").strip()
@@ -1782,7 +1768,7 @@ class WordStudyApp:
                     break
                 
                 if not chinese:
-                    print("❌ 请输入中文释义")
+                    print("请输入中文释义")
                     continue
                 
                 cursor.execute('''
@@ -1791,21 +1777,21 @@ class WordStudyApp:
                 ''', (english, chinese, today))
                 
                 conn.commit()
-                print("✅ 已添加例句")
+                print("已添加例句")
                 
                 continue_input = input("继续添加? (y/n): ").strip().lower()
                 if continue_input != 'y':
                     break
             
         except Exception as e:
-            print(f"\n❌ 导入失败: {str(e)}")
+            print(f"\n导入失败: {str(e)}")
         finally:
             conn.close()
     
     def _import_phrases_from_pdf(self):
         """从PDF文件导入例句"""
         print("\n" + "="*60)
-        print("📄 从PDF导入例句")
+        print("从PDF导入例句")
         print("="*60)
         
         # 获取PDF文件路径
@@ -1815,44 +1801,44 @@ class WordStudyApp:
         )
 
         if status == 'ok':
-            print(f"📄 已选择: {pdf_path}")
+            print(f"已选择: {pdf_path}")
         elif status == 'cancel':
-            print("❌ 未选择文件，已取消导入")
+            print("未选择文件，已取消导入")
             return
         else:
-            print("⚠️ 无法打开文件选择框，请手动输入路径")
+            print("无法打开文件选择框，请手动输入路径")
             pdf_path = input("请输入PDF文件路径（或直接拖拽文件到此处）: ").strip().strip('"')
 
             if pdf_path == '0':
                 return
 
             if not pdf_path:
-                print("❌ 请输入文件路径")
+                print("请输入文件路径")
                 return
         
         # 检查文件是否存在
         import os
         if not os.path.exists(pdf_path):
-            print(f"❌ 文件不存在: {pdf_path}")
+            print(f"文件不存在: {pdf_path}")
             return
         
         if not pdf_path.lower().endswith('.pdf'):
-            print("❌ 请选择PDF文件")
+            print("请选择PDF文件")
             return
         
-        print("\n⏳ 正在读取PDF文件...")
+        print("\n正在读取PDF文件...")
         
         full_text = ""
         
         try:
             full_text = self._read_pdf_text(pdf_path)
-            print("✅ 使用pypdf成功读取PDF")
+            print("使用pypdf成功读取PDF")
         except Exception as e:
-            print(f"⚠️ PDF文本提取失败: {str(e)}")
+            print(f"PDF文本提取失败: {str(e)}")
         
         # 方案3：如果以上都失败，尝试OCR（处理扫描版PDF）
         if not full_text.strip():
-            print("⚠️ 文本提取失败，尝试OCR识别...")
+            print("文本提取失败，尝试OCR识别...")
             try:
                 from PIL import Image
                 import pytesseract
@@ -1868,24 +1854,24 @@ class WordStudyApp:
                         all_text.append(text)
                 
                 full_text = '\n'.join(all_text)
-                print(f"✅ 使用OCR成功识别 {len(images)} 页")
+                print(f"使用OCR成功识别 {len(images)} 页")
                 
             except Exception as e3:
-                print(f"❌ OCR识别失败（需要安装Tesseract和poppler）: {str(e3)}")
+                print(f"OCR识别失败（需要安装Tesseract和poppler）: {str(e3)}")
                 return
         
         if not full_text.strip():
-            print("❌ PDF文件为空或无法提取文本")
+            print("PDF文件为空或无法提取文本")
             return
         
         # 解析英语和中文配对
         phrases = self._parse_phrases_from_text(full_text)
         
         if not phrases:
-            print("❌ 未找到有效的例句对")
+            print("未找到有效的例句对")
             return
         
-        print(f"\n📊 找到 {len(phrases)} 条例句")
+        print(f"\n找到 {len(phrases)} 条例句")
         print("\n" + "="*60)
         print("前5条例句预览:")
         print("="*60)
@@ -1896,7 +1882,7 @@ class WordStudyApp:
         confirm = input("\n是否导入这些例句? (y/n): ").strip().lower()
         
         if confirm != 'y':
-            print("❌ 已取消导入")
+            print("已取消导入")
             return
         
         # 保存到数据库（先删除今日已有的例句，只保留本次导入的）
@@ -1922,7 +1908,7 @@ class WordStudyApp:
         conn.commit()
         conn.close()
         
-        print(f"\n✅ 成功导入 {import_count} 条例句（已覆盖今日之前的例句）")
+        print(f"\n成功导入 {import_count} 条例句（已覆盖今日之前的例句）")
     
     def _parse_phrases_from_text(self, text: str) -> List[tuple]:
         """解析文本中的英语和中文例句对（支持对话格式，处理跨行句子）"""
@@ -2154,11 +2140,11 @@ class WordStudyApp:
         conn.close()
         
         if not rows:
-            print("\n❌ 今天还没有添加任何例句")
+            print("\n今天还没有添加任何例句")
             return
         
         print("\n" + "="*60)
-        print(f"📖 循环播放今日例句（共 {len(rows)} 条，按 Ctrl+C 退出）")
+        print(f"循环播放今日例句（共 {len(rows)} 条，按 Ctrl+C 退出）")
         print("="*60)
         
         try:
@@ -2171,7 +2157,7 @@ class WordStudyApp:
                     self.speak_sync(english)
                 
         except KeyboardInterrupt:
-            print("\n\n👋 退出播放")
+            print("\n\n退出播放")
     
     def view_today_added_words(self):
         """查看今天添加的单词（支持删除）"""
@@ -2190,13 +2176,13 @@ class WordStudyApp:
             conn.close()
             
             if not words_data:
-                print("\n❌ 今天还没有添加任何单词")
+                print("\n今天还没有添加任何单词")
                 return
             
             words = self.enrich_words(words_data)
             
             print("\n" + "="*60)
-            print("📝 今日添加的单词")
+            print("今日添加的单词")
             print("="*60)
             print(f"今日共添加了 {len(words)} 个单词:\n")
             
@@ -2226,11 +2212,11 @@ class WordStudyApp:
                     confirm = input(f"确定要删除 '{word_to_remove['vocabulary']}' 吗? (y/n): ").strip().lower()
                     if confirm == 'y':
                         self.remove_from_study_list(word_to_remove['vc_id'])
-                        print(f"✅ 已删除 '{word_to_remove['vocabulary']}'")
+                        print(f"已删除 '{word_to_remove['vocabulary']}'")
                 else:
-                    print("❌ 无效编号")
+                    print("无效编号")
             except ValueError:
-                print("❌ 请输入有效的编号")
+                print("请输入有效的编号")
     
     def export_today_words(self, words: List[Dict]):
         """导出今日添加的单词到txt文件"""
@@ -2252,9 +2238,9 @@ class WordStudyApp:
         try:
             with open(filename, 'w', encoding='utf-8') as f:
                 f.write(content)
-            print(f"\n✅ 成功导出到文件: {filename}")
+            print(f"\n成功导出到文件: {filename}")
         except Exception as e:
-            print(f"\n❌ 导出失败: {str(e)}")
+            print(f"\n导出失败: {str(e)}")
     
     def remove_from_study_list(self, voc_id: str) -> bool:
         """从学习列表中删除单词（同时清掉它的复习日志）"""
@@ -2273,10 +2259,10 @@ class WordStudyApp:
         """搜索并添加单词子菜单"""
         while True:
             print("\n" + "="*60)
-            print("🔍 搜索并添加单词")
+            print("搜索并添加单词")
             print("="*60)
-            print("7.1 🔎 直接搜索单词")
-            print("7.2 📄 从PDF导入单词")
+            print("7.1 直接搜索单词")
+            print("7.2 从PDF导入单词")
             print("0. 返回")
             print("="*60)
 
@@ -2289,7 +2275,7 @@ class WordStudyApp:
             elif choice in ('7.2', '2'):
                 self.import_words_from_pdf()
             else:
-                print("❌ 无效选择")
+                print("无效选择")
 
     def _read_pdf_text(self, pdf_path: str) -> str:
         """提取PDF文本（优先pypdf，兼容旧版PyPDF2）"""
@@ -2650,7 +2636,7 @@ class WordStudyApp:
     def import_words_from_pdf(self):
         """从PDF词表导入单词到学习列表"""
         print("\n" + "="*60)
-        print("📄 从PDF导入单词")
+        print("从PDF导入单词")
         print("="*60)
 
         status, pdf_path = self._choose_file_dialog(
@@ -2659,12 +2645,12 @@ class WordStudyApp:
         )
 
         if status == 'ok':
-            print(f"📄 已选择: {pdf_path}")
+            print(f"已选择: {pdf_path}")
         elif status == 'cancel':
-            print("❌ 未选择文件，已取消导入")
+            print("未选择文件，已取消导入")
             return
         else:
-            print("⚠️ 无法打开文件选择框，请手动输入路径")
+            print("无法打开文件选择框，请手动输入路径")
             default_path = "dc.pdf"
             hint = f"回车使用 {default_path}" if os.path.exists(default_path) else "输入0返回"
             pdf_path = input(f"PDF文件路径 ({hint}): ").strip().strip('"')
@@ -2673,30 +2659,30 @@ class WordStudyApp:
                 return
             if not pdf_path:
                 if not os.path.exists(default_path):
-                    print("❌ 请输入文件路径")
+                    print("请输入文件路径")
                     return
                 pdf_path = default_path
 
         if not os.path.exists(pdf_path):
-            print(f"❌ 文件不存在: {pdf_path}")
+            print(f"文件不存在: {pdf_path}")
             return
         if not pdf_path.lower().endswith('.pdf'):
-            print("❌ 请选择PDF文件")
+            print("请选择PDF文件")
             return
 
-        print("\n⏳ 正在读取PDF文件...")
+        print("\n正在读取PDF文件...")
         try:
             text = self._read_pdf_text(pdf_path)
         except Exception as e:
-            print(f"❌ 无法读取PDF文件: {e}")
+            print(f"无法读取PDF文件: {e}")
             return
 
         entries = self._extract_entries_from_pdf_text(text)
         if not entries:
-            print("❌ 未从PDF中识别到英文单词")
+            print("未从PDF中识别到英文单词")
             return
 
-        print(f"📄 识别到 {len(entries)} 个单词，正在词库中匹配...")
+        print(f"识别到 {len(entries)} 个单词，正在词库中匹配...")
         matched, missing = self._lookup_words_exact([e['word'] for e in entries])
 
         entry_by_key = {e['word'].lower(): e for e in entries}
@@ -2716,7 +2702,7 @@ class WordStudyApp:
             try:
                 new_words = self._insert_missing_words(missing_entries)
             except Exception as e:
-                print(f"⚠️ 新增词库失败: {e}")
+                print(f"新增词库失败: {e}")
 
         added_keys = {w['vocabulary'].lower() for w in new_words}
         still_missing = [w for w in missing if w.lower() not in added_keys]
@@ -2758,14 +2744,14 @@ class WordStudyApp:
         ]
 
         if still_missing:
-            print(f"\n⚠️ 有 {len(still_missing)} 个单词新增失败，未能加入学习列表:")
+            print(f"\n有 {len(still_missing)} 个单词新增失败，未能加入学习列表:")
             print("   " + ", ".join(still_missing))
         if blank_meaning:
-            print(f"\nℹ️ {len(blank_meaning)} 个新增单词没有中文释义，学习时会显示为空:")
+            print(f"\n{len(blank_meaning)} 个新增单词没有中文释义，学习时会显示为空:")
             print("   " + ", ".join(blank_meaning))
 
         if not words:
-            print("\n❌ 没有可添加的单词")
+            print("\n没有可添加的单词")
             return
 
         prompt = f"\n将 {len(words)} 个单词加入学习列表"
@@ -2776,9 +2762,9 @@ class WordStudyApp:
         confirm = input(prompt + "? (y/n): ").strip().lower()
         if confirm != 'y':
             if new_words:
-                print(f"ℹ️ 已新增到本地词库的 {len(new_words)} 个单词会保留，"
+                print(f"已新增到本地词库的 {len(new_words)} 个单词会保留，"
                       "之后可在 7.1 中搜索添加")
-            print("❌ 已取消导入")
+            print("已取消导入")
             return
 
         updated = self._overwrite_local_entries(words)
@@ -2790,19 +2776,19 @@ class WordStudyApp:
         added = self.add_to_study_list(words)
         skipped = len(words) - added
         if new_words:
-            print(f"✨ 已在本地词库新增 {len(new_words)} 个单词")
+            print(f"已在本地词库新增 {len(new_words)} 个单词")
         if updated:
-            print(f"✏️ 已用导入内容覆盖本地词库 {updated} 条")
-        print(f"\n✅ 成功添加 {added} 个单词到学习列表")
+            print(f"已用导入内容覆盖本地词库 {updated} 条")
+        print(f"\n成功添加 {added} 个单词到学习列表")
         if skipped:
-            print(f"ℹ️ {skipped} 个单词已在学习列表中，未重复添加")
+            print(f"{skipped} 个单词已在学习列表中，未重复添加")
         if added:
-            print("💡 回到主菜单选择 1-4 开始学习")
+            print("回到主菜单选择 1-4 开始学习")
 
     def interactive_search(self):
         """交互式搜索并添加单词"""
         print("\n" + "="*60)
-        print("🔍 搜索并添加单词")
+        print("搜索并添加单词")
         print("="*60)
         
         keyword = input("输入要搜索的英文单词 (精准搜索，输入0返回): ").strip()
@@ -2811,7 +2797,7 @@ class WordStudyApp:
         
         words = self.search_words(keyword, limit=20)
         if not words:
-            print(f"❌ 词库中未找到 '{keyword}'")
+            print(f"词库中未找到 '{keyword}'")
             if not re.fullmatch(r"[A-Za-z][A-Za-z'’\-]{0,49}", keyword):
                 return
             confirm = input("是否直接新增该单词到本地词库? (y/n): ").strip().lower()
@@ -2823,16 +2809,16 @@ class WordStudyApp:
                     [{'word': keyword, 'meaning': meaning}]
                 )
             except Exception as e:
-                print(f"❌ 新增单词失败: {e}")
+                print(f"新增单词失败: {e}")
                 return
             if not new_words:
-                print("❌ 该单词已在词库中")
+                print("该单词已在词库中")
                 return
             added = self.add_to_study_list(new_words)
-            print(f"✨ 已在本地词库新增单词，并添加 {added} 个到学习列表")
+            print(f"已在本地词库新增单词，并添加 {added} 个到学习列表")
             return
         
-        print(f"\n✅ 找到 {len(words)} 个单词:")
+        print(f"\n找到 {len(words)} 个单词:")
         for i, word in enumerate(words, 1):
             print(f"{i}. {word['vocabulary']}")
             print(format_meaning(
@@ -2846,44 +2832,44 @@ class WordStudyApp:
             selected_words = [words[i] for i in indices if 0 <= i < len(words)]
             
             added = self.add_to_study_list(selected_words)
-            print(f"\n✅ 成功添加 {added} 个单词到学习列表")
+            print(f"\n成功添加 {added} 个单词到学习列表")
         except (ValueError, IndexError):
-            print("❌ 输入无效")
+            print("输入无效")
     
     def main_menu(self):
         """主菜单"""
         while True:
             stats = self.get_session_stats()
             print("\n" + "="*60)
-            print("🎓 英语单词学习工具")
+            print("英语单词学习工具")
             print("="*60)
-            print(f"📊 学习列表 {stats['total']} 词 | 今日到期 {stats['due']} | "
+            print(f"学习列表 {stats['total']} 词 | 今日到期 {stats['due']} | "
                   f"新词 {stats['new_introduced']}/{stats['new_limit']} | "
                   f"待学新词 {stats['new_available']}")
             if stats['new_today']:
-                print(f"🆕 今日导入必学 {stats['new_today']} 词 | "
+                print(f"今日导入必学 {stats['new_today']} 词 | "
                       f"未学 {stats['new_today_pending']}")
             if stats['extra_available']:
-                print(f"🧠 今日巩固 {stats['extra_available']} 词（今日已学词随机巩固）")
+                print(f"今日巩固 {stats['extra_available']} 词（今日已学词随机巩固）")
             print("="*60)
-            print("1. 📖 看英选中 (带发音)")
-            print("2. 📝 看中选英")
-            print("3. 🔤 看中拼写英")
-            print("4. 🎧 听音选中 (听发音选中文)")
-            print("5. 🔊 语音播放")
-            print("6. 📓 错题本")
-            print("7. 🔍 搜索并添加单词")
-            print("8. 📖 雅思阅读训练")
-            print("9. 🔧 其他设置")
-            print("10. 🎯 自由练习 (不影响复习计划)")
-            print("11. 🌱 自由学习 (认识/不认识，直到全部学会)")
+            print("1. 看英选中 (带发音)")
+            print("2. 看中选英")
+            print("3. 看中拼写英")
+            print("4. 听音选中 (听发音选中文)")
+            print("5. 语音播放")
+            print("6. 错题本")
+            print("7. 搜索并添加单词")
+            print("8. 雅思阅读训练")
+            print("9. 其他设置")
+            print("10. 自由练习 (不影响复习计划)")
+            print("11. 自由学习 (认识/不认识，直到全部学会)")
             print("0. 退出")
             print("="*60)
             
             choice = input("请选择 (0-11): ").strip()
             
             if choice == '0':
-                print("\n👋 再见!")
+                print("\n再见!")
                 break
             elif choice == '1':
                 self.mode_english_to_chinese()
@@ -2908,17 +2894,17 @@ class WordStudyApp:
             elif choice == '11':
                 self.free_learning()
             else:
-                print("❌ 无效选择")
+                print("无效选择")
 
     def free_practice_menu(self):
         """自由练习：不写复习计划，只记录练习日志"""
         print("\n" + "="*60)
-        print("🎯 自由练习")
+        print("自由练习")
         print("="*60)
         
         words = self.get_practice_words(self.study_count)
         if not words:
-            print("❌ 学习列表为空，请先搜索并添加单词")
+            print("学习列表为空，请先搜索并添加单词")
             return
         
         print(f"本次随机抽取 {len(words)} 个单词，练习结果不影响复习计划")
@@ -2941,12 +2927,12 @@ class WordStudyApp:
         elif choice == '4':
             self.mode_listen_to_chinese_with_words(words, practice=True)
         else:
-            print("❌ 无效选择")
+            print("无效选择")
     
     def free_learning(self):
         """自由学习：认识/不认识二选一，不认识的词看释义和例句后重新排队，直到全部认识"""
         print("\n" + "="*60)
-        print("\033[1;32m🌱 自由学习\033[0m")
+        print("\033[1;32m自由学习\033[0m")
         print("="*60)
 
         words = self.get_session_words(self.study_count)
@@ -2955,36 +2941,36 @@ class WordStudyApp:
             words = self.get_practice_words(self.study_count)
             source = "历史单词（今天没有待学的词）"
         if not words:
-            print("❌ 学习列表为空，请先用「7. 搜索并添加单词」添加单词")
+            print("学习列表为空，请先用「7. 搜索并添加单词」添加单词")
             return
 
         queue = list(words)
         learned = 0
         print(f"本次从{source}取 {len(queue)} 个单词，全部认识后结束")
-        print("1 = 认识   2 = 不认识   3 = 🔊 重播发音   0 = 返回")
+        print("1 = 认识   2 = 不认识   3 = 重播发音   0 = 返回")
         print("="*60)
 
         while queue:
             word = queue.pop(0)
             print("\n" + "-"*60)
-            print(f"📖 队列剩余 {len(queue) + 1} 个 | 已学会 {learned} 个")
+            print(f"队列剩余 {len(queue) + 1} 个 | 已学会 {learned} 个")
             print(f"\n   {word.get('vocabulary', '')}")
             phonetic = word.get('phonetic_us') or word.get('phonetic_uk')
             if phonetic:
                 print(f"   [美] {phonetic}")
-            print("   🔊 自动播放（按 3 可重播）")
+            print("   自动播放（按 3 可重播）")
             print()
             self.speak_sync(word.get('vocabulary', ''))
 
             while True:
                 choice = self._prompt_recognition()
                 if choice == '0':
-                    print(f"\n👋 本次已学会 {learned} 个单词")
+                    print(f"\n本次已学会 {learned} 个单词")
                     return
                 if choice == '1':
                     self.record_review(word, correct=True, duration_ms=0)
                     learned += 1
-                    print("✅ 已学会")
+                    print("已学会")
                     break
                 if choice == '3':
                     self.speak_sync(word.get('vocabulary', ''))
@@ -2992,26 +2978,26 @@ class WordStudyApp:
 
                 examples = self._show_word_answer(word)
                 if not self._prompt_answer_playback(word, examples):
-                    print(f"\n👋 本次已学会 {learned} 个单词")
+                    print(f"\n本次已学会 {learned} 个单词")
                     return
                 queue.append(word)
-                print(f"🔁 稍后会再考你一次（队列还有 {len(queue)} 个）")
+                print(f"稍后会再考你一次（队列还有 {len(queue)} 个）")
                 break
 
         print("\n" + "="*60)
-        print(f"🎉 全部学会！本次共学会 {learned} 个单词")
+        print(f"全部学会！本次共学会 {learned} 个单词")
         print("="*60)
 
     def _prompt_recognition(self) -> str:
         while True:
-            choice = input("请选择 (1=认识, 2=不认识, 3=🔊播放发音, 0=返回): ").strip()
+            choice = input("请选择 (1=认识, 2=不认识, 3=播放发音, 0=返回): ").strip()
             if choice in ('0', '1', '2', '3'):
                 return choice
-            print("❌ 输入无效，请输入 1、2、3 或 0")
+            print("输入无效，请输入 1、2、3 或 0")
 
     def _show_word_answer(self, word):
         """不认识时展示中文释义和例句，返回例句列表供播放"""
-        print("\n📝 中文释义:")
+        print("\n中文释义:")
         interpretation = (word.get('interpretation') or '').strip() or '暂无释义'
         for line in meaning_lines(interpretation):
             print(f"   {line}")
@@ -3030,22 +3016,22 @@ class WordStudyApp:
                 examples = [{'english': row[0], 'chinese': ''}]
 
         if examples:
-            print("\n💬 例句:")
+            print("\n例句:")
             for example in examples[:2]:
                 print(f"   {example['english']}")
                 if example.get('chinese'):
                     print(f"   {example['chinese']}")
-            print("\n   🔊 按 4 播放例句")
+            print("\n   按 4 播放例句")
         else:
-            print("\n💬 例句: 暂无例句")
+            print("\n例句: 暂无例句")
         return examples
 
     def _prompt_answer_playback(self, word, examples) -> bool:
         """展示答案后等待操作；返回 False 表示用户选择退出"""
         has_example = bool(examples)
-        tips = "0=返回   3=🔊播放单词"
+        tips = "0=返回   3=播放单词"
         if has_example:
-            tips += "   4=🔊播放例句"
+            tips += "   4=播放例句"
         print(f"\n{tips}   回车=下一个")
         while True:
             choice = input(">>> ").strip()
@@ -3058,14 +3044,14 @@ class WordStudyApp:
             elif choice == '4' and has_example:
                 self.speak_sync(examples[0]['english'])
             else:
-                print(f"❌ 输入无效，{tips}，或直接回车继续")
+                print(f"输入无效，{tips}，或直接回车继续")
     
     def reading_practice(self):
         """雅思阅读训练"""
         try:
             from reading_practice import ReadingPractice
         except ImportError:
-            print("❌ 未找到 reading_practice.py")
+            print("未找到 reading_practice.py")
             return
         centered = sys.stdout if isinstance(sys.stdout, CenteredStdout) else None
         if centered is not None:
@@ -3080,11 +3066,11 @@ class WordStudyApp:
         """语音播放子菜单"""
         while True:
             print("\n" + "="*60)
-            print("🔊 语音播放")
+            print("语音播放")
             print("="*60)
-            print("5.1 📖 今日例句")
-            print("5.2 🔊 播放今日复习单词及例句")
-            print("5.3 🎧 听英语故事")
+            print("5.1 今日例句")
+            print("5.2 播放今日复习单词及例句")
+            print("5.3 听英语故事")
             print("0. 返回")
             print("="*60)
             
@@ -3099,7 +3085,7 @@ class WordStudyApp:
             elif choice == '5.3' or choice == '3':
                 self.play_english_story()
             else:
-                print("❌ 无效选择")
+                print("无效选择")
     
     def play_english_story(self):
         """播放英语故事"""
@@ -3148,7 +3134,7 @@ class WordStudyApp:
         
         while True:
             print("\n" + "="*60)
-            print("🎧 英语故事听读")
+            print("英语故事听读")
             print("="*60)
             for i, story in enumerate(stories, 1):
                 print(f"{i}. {story['title']}")
@@ -3164,12 +3150,12 @@ class WordStudyApp:
                 index = int(choice) - 1
                 if 0 <= index < len(stories):
                     story = stories[index]
-                    print(f"\n📖 {story['title']}")
+                    print(f"\n{story['title']}")
                     print("-" * 60)
                     print(f"英文: {story['text']}")
                     print("\n中文:")
                     print(story['chinese'])
-                    print("\n🎧 开始播放...")
+                    print("\n开始播放...")
                     
                     # 分段播放英语故事
                     sentences = story['text'].split('. ')
@@ -3179,22 +3165,22 @@ class WordStudyApp:
                             print(f"  {sentence}")
                             self.speak_sync(sentence)
                     
-                    print("\n✅ 故事播放完成!")
+                    print("\n故事播放完成!")
                 else:
-                    print("❌ 无效选择")
+                    print("无效选择")
             except ValueError:
-                print("❌ 请输入有效的数字")
+                print("请输入有效的数字")
     
     def other_settings_menu(self):
         """其他设置子菜单"""
         while True:
             print("\n" + "="*60)
-            print("🔧 其他设置")
+            print("其他设置")
             print("="*60)
-            print("9.1 📝 查看今日添加的单词")
-            print("9.2 🔧 设置每次学习数量")
-            print(f"9.3 🆕 设置每日新词上限 (当前 {self.new_per_day})")
-            print(f"9.4 🎯 设置目标记忆保持率 (当前 {self.desired_retention:.2f})")
+            print("9.1 查看今日添加的单词")
+            print("9.2 设置每次学习数量")
+            print(f"9.3 设置每日新词上限 (当前 {self.new_per_day})")
+            print(f"9.4 设置目标记忆保持率 (当前 {self.desired_retention:.2f})")
             print("0. 返回")
             print("="*60)
             
@@ -3211,12 +3197,12 @@ class WordStudyApp:
             elif choice == '9.4' or choice == '4':
                 self.set_desired_retention()
             else:
-                print("❌ 无效选择")
+                print("无效选择")
     
     def set_study_count(self):
         """设置每次学习单词数量"""
         print("\n" + "="*60)
-        print("🔧 设置每次学习数量")
+        print("设置每次学习数量")
         print("="*60)
         print(f"当前设置: 每次学习 {self.study_count} 个单词")
         print("\n请输入新的数量 (1-50，输入0返回):")
@@ -3224,22 +3210,22 @@ class WordStudyApp:
         try:
             new_count_input = input(">>> ").strip()
             if new_count_input == '0':
-                print("\n👋 返回主菜单")
+                print("\n返回主菜单")
                 return
             new_count = int(new_count_input)
             if 1 <= new_count <= 50:
                 self.study_count = new_count
                 self.save_study_count()
-                print(f"✅ 已设置每次学习 {self.study_count} 个单词")
+                print(f"已设置每次学习 {self.study_count} 个单词")
             else:
-                print("❌ 请输入1-50之间的数字")
+                print("请输入1-50之间的数字")
         except ValueError:
-            print("❌ 请输入有效的数字")
+            print("请输入有效的数字")
 
     def set_new_per_day(self):
         """设置每日新词上限"""
         print("\n" + "="*60)
-        print("🆕 设置每日新词上限")
+        print("设置每日新词上限")
         print("="*60)
         print(f"当前设置: 每天最多学习 {self.new_per_day} 个新词")
         print("提示: 0 表示不安排新词，只复习到期单词；建议 10-20")
@@ -3253,16 +3239,16 @@ class WordStudyApp:
             if 0 <= new_limit <= 100:
                 self.new_per_day = new_limit
                 self._save_config({'new_per_day': new_limit})
-                print(f"✅ 每日新词上限已设置为 {self.new_per_day}")
+                print(f"每日新词上限已设置为 {self.new_per_day}")
             else:
-                print("❌ 请输入0-100之间的数字")
+                print("请输入0-100之间的数字")
         except ValueError:
-            print("❌ 请输入有效的数字")
+            print("请输入有效的数字")
 
     def set_desired_retention(self):
         """设置 FSRS 目标记忆保持率"""
         print("\n" + "="*60)
-        print("🎯 设置目标记忆保持率")
+        print("设置目标记忆保持率")
         print("="*60)
         print(f"当前设置: {self.desired_retention:.2f}")
         print("提示: 0.90 表示希望记住 90% 的单词；越高复习越频繁")
@@ -3278,12 +3264,12 @@ class WordStudyApp:
                 self.desired_retention = percent / 100
                 self._save_config({'desired_retention': self.desired_retention})
                 self._build_engine()
-                print(f"✅ 目标记忆保持率已设置为 {self.desired_retention:.2f}")
-                print("💾 新设置从下一次作答开始生效")
+                print(f"目标记忆保持率已设置为 {self.desired_retention:.2f}")
+                print("新设置从下一次作答开始生效")
             else:
-                print("❌ 请输入70-97之间的数字")
+                print("请输入70-97之间的数字")
         except ValueError:
-            print("❌ 请输入有效的数字")
+            print("请输入有效的数字")
 
 def main():
     """主函数"""
@@ -3295,7 +3281,7 @@ def main():
         print("\n\n程序已退出")
         sys.exit(0)
     except Exception as e:
-        print(f"❌ 错误: {e}")
+        print(f"错误: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
