@@ -73,6 +73,14 @@
 - 覆盖单选、多选、T/F/NG、Y/N/NG、匹配、分类、摘要填空、句子/表格/图示填空、简答等题型
 - 题库不随仓库分发，运行 `python import_reading.py` 从 [hwttop5/ielts-reading-past-papers](https://github.com/hwttop5/ielts-reading-past-papers) 下载并导入 200+ 篇、约 2800 题
 
+### 每日单词短文（8.6）
+- 在「8. 雅思阅读训练」里选 `6` 进入，按 **今日新学 → 今日复习 → 近期薄弱** 的顺序挑 15 个目标词，生成约 300 词的雅思风格短文
+- 优先从本地真题库截取约 300 词的素材，命中足够目标词时让 AI 改写融入全部目标词；命中不足则用 AI 自拟，避免生硬拼接
+- 每篇带中文翻译和「每个目标词一句原文例句」，目标词在正文中高亮；生成后会校验覆盖率与长度，缺词时自动补一次
+- 短文在 8.1 同款分栏阅读器中打开：**鼠标双击单词，右侧显示中文释义**；离线词库没有释义时自动联网查询并写回 `word_learn.db`
+- **每天只生成一次**，结果缓存进 `word_study.db` 的 `daily_passage` 表，之后打开直接查看；菜单 `2` 可显式重新生成
+- 使用 DeepSeek（`deepseek-chat`）OpenAI 兼容接口，Key 在菜单 `4` 里设置，会先联网校验再保存；粘贴时混入的反引号、空格和终端颜色控制字符会被自动清理。Key 只写入本机 `user_config.json`，界面只显示掩码；也可用环境变量 `DEEPSEEK_API_KEY`。`user_config.json` 已在 `.gitignore` 中，**不会提交到 GitHub**
+
 ### 错题本
 答错的词自动进错题本，可按「今日 / 全部」查看，也可以只针对错题重练，练完仍按 FSRS 更新。
 
@@ -129,6 +137,7 @@ WordStudy/
 ├─ reading_viewer.py     # 终端阅读器：左右分栏、鼠标双击查词
 ├─ reading_exam.py       # 答题界面：单页滚动、作答与判分
 ├─ reading_practice.py   # 套题选择、阅读会话、错题记录
+├─ daily_passage.py      # 8.6 每日单词短文：选词、真题取材、DeepSeek、缓存
 ├─ import_reading.py     # 下载并导入雅思阅读题库
 ├─ rebuild_vocab_db.py   # 从开源词表重建 word_learn.db
 ├─ meaning_format.py     # 释义按词性拆行排版
@@ -143,8 +152,8 @@ WordStudy/
 | 文件 | 是否入库 | 说明 |
 | --- | --- | --- |
 | `word_learn.db` | | 词库，随仓库提供 |
-| `word_study.db` | | 你的学习记录：学习列表、FSRS 状态、错题本、阅读题库、作答日志 |
-| `user_config.json` | | 个人设置：每次学习数量、语速等 |
+| `word_study.db` | | 你的学习记录：学习列表、FSRS 状态、错题本、阅读题库、作答日志、每日短文缓存 |
+| `user_config.json` | | 个人设置：每次学习数量、语速、DeepSeek API Key 等（仅本机） |
 | `data/` | | 备份、原始词表、TTS 缓存、阅读题库源文件 |
 
 `word_study.db`、`user_config.json`、`data/` 已写入 `.gitignore`，学习进度不会被提交。想从头开始，删掉 `word_study.db` 即可。

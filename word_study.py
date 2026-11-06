@@ -80,6 +80,10 @@ def _mci_send(command: str) -> str:
 _ANSI_ESCAPE_RE = re.compile(r'\x1b\[[0-9;?]*[A-Za-z]')
 _BLOCK_COLUMNS = 60
 
+# 唯一的界面图标：仅在功能 1/2/3/4 判题错误时出现，答对不显示任何图标。
+# 集中定义，方便以后换成别的标记。
+WRONG_ICON = '❌'
+
 
 def _char_width(ch: str) -> int:
     if unicodedata.combining(ch):
@@ -944,7 +948,7 @@ class WordStudyApp:
             if correct:
                 print_answer("正确! 答案: ")
             else:
-                print_answer("错误! 正确答案是: ")
+                print_answer(f"{WRONG_ICON} 错误! 正确答案是: ")
             return {
                 'correct': correct,
                 'correct_label': correct_label,
@@ -1094,7 +1098,7 @@ class WordStudyApp:
                 print("拼写正确!")
                 correct_count += 1
             else:
-                print(f"拼写错误! 正确答案是: {word['vocabulary']}")
+                print(f"{WRONG_ICON} 拼写错误! 正确答案是: {word['vocabulary']}")
             
             self.record_review(word, correct, duration_ms, practice=practice_mode)
             
@@ -1459,7 +1463,7 @@ class WordStudyApp:
                 print("拼写正确!")
                 correct_count += 1
             else:
-                print(f"拼写错误! 正确答案是: {word['vocabulary']}")
+                print(f"{WRONG_ICON} 拼写错误! 正确答案是: {word['vocabulary']}")
             
             self.record_review(
                 word, correct, duration_ms, practice=not do_schedule
@@ -3057,7 +3061,11 @@ class WordStudyApp:
         if centered is not None:
             centered.set_enabled(False)
         try:
-            ReadingPractice(self.study_db_path).run()
+            ReadingPractice(
+                self.study_db_path,
+                vocab_db_path=self.db_path,
+                config_path=self.config_path,
+            ).run()
         finally:
             if centered is not None:
                 centered.set_enabled(True)

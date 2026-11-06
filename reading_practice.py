@@ -4,6 +4,7 @@
 
 import json
 import math
+import os
 import random
 import re
 import shutil
@@ -63,8 +64,15 @@ def loose_answer(value):
 
 
 class ReadingPractice:
-    def __init__(self, db_path="word_study.db"):
+    def __init__(self, db_path="word_study.db", vocab_db_path=None,
+                 config_path=None):
         self.db_path = db_path
+        self.vocab_db_path = vocab_db_path or os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "word_learn.db"
+        )
+        self.config_path = config_path or os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "user_config.json"
+        )
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         self.ready = self._check_tables()
@@ -99,9 +107,10 @@ class ReadingPractice:
             print("3. 高频优先随机")
             print("4. 错题重练")
             print("5. 练习记录")
+            print("6. 每日单词短文（8.6）")
             print("0. 返回主菜单")
             print("=" * 60)
-            choice = input("请选择 (0-5): ").strip()
+            choice = input("请选择 (0-6): ").strip()
             try:
                 if choice == "0":
                     break
@@ -115,6 +124,17 @@ class ReadingPractice:
                     self._wrong_menu()
                 elif choice == "5":
                     self._show_stats()
+                elif choice == "6":
+                    from daily_passage import DailyPassage
+                    daily = DailyPassage(
+                        self.db_path,
+                        self.vocab_db_path,
+                        self.config_path,
+                    )
+                    try:
+                        daily.run()
+                    finally:
+                        daily.close()
                 else:
                     print("无效选择")
             except KeyboardInterrupt:
