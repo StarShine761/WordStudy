@@ -15,11 +15,20 @@ from ctypes import wintypes
 from datetime import datetime
 
 from meaning_format import meaning_lines
-from online_dict import OnlineLookupError, fetch as fetch_online
+from online_dict import (
+    OnlineLookupError, fetch as fetch_online, translate as translate_sentence,
+)
 
 DICT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "word_learn.db")
 
 ENCRYPTED_RE = re.compile(r"^[A-Za-z0-9+/=]{20,}$")
+SENTENCE_END_RE = re.compile(r"""[.!?]["'”’)]*(?=\s|$)""")
+ABBREVIATION_RE = re.compile(r"([A-Za-z][A-Za-z.]*)$")
+ABBREVIATIONS = {
+    "mr", "mrs", "ms", "dr", "prof", "st", "sr", "jr", "vs", "etc",
+    "e.g", "i.e", "eg", "ie", "no", "fig", "al", "inc", "ltd", "co",
+    "gov", "sen", "rep", "capt", "lt", "sgt", "u.s", "u.k", "a.m", "p.m",
+}
 
 S_RESET = "\x1b[0m"
 S_DIM = "\x1b[2m"
@@ -61,6 +70,10 @@ VK_DOWN = 0x28
 
 LEFT_BUTTON = 0x0001
 RIGHT_BUTTON = 0x0002
+
+WAIT_OBJECT_0 = 0
+WAIT_TIMEOUT = 258
+LONG_PRESS_SECONDS = 0.6
 
 
 class COORD(ctypes.Structure):
@@ -126,6 +139,8 @@ if sys.platform == "win32":
     _kernel32.ReadConsoleInputW.argtypes = [wintypes.HANDLE, ctypes.POINTER(INPUT_RECORD),
                                             wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
     _kernel32.ReadConsoleInputW.restype = wintypes.BOOL
+    _kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    _kernel32.WaitForSingleObject.restype = wintypes.DWORD
 
 
 def char_width(ch):
@@ -192,6 +207,45 @@ def fit(text, width, style=""):
     text = clip_display(str(text), width)
     pad = " " * max(0, width - disp_width(text))
     return f"{style}{text}{pad}{S_RESET}" if style else text + pad
+
+
+def _is_sentence_end(text, match):
+    if text[match.start()] != ".":
+        return True
+    token = ABBREVIATION_RE.search(text[:match.start()])
+    if not token:
+        return True
+    word = token.group(1).lower()
+    return word not in ABBREVIATIONS and len(word) > 1
+
+
+def sentence_at(lines, index, char_index):
+    """从折行后的段落里取出点击位置所在的整句。"""
+    if not (0 <= index < len(lines)) or not lines[index].strip():
+        return ""
+    start_line = index
+    while start_line > 0 and lines[start_line - 1].strip():
+        start_line -= 1
+    end_line = index + 1
+    while end_line < len(lines) and lines[end_line].strip():
+        end_line += 1
+    text = " ".join(lines[start_line:end_line])
+    offset = sum(len(lines[i]) + 1 for i in range(start_line, index)) + char_index
+    offset = max(0, min(offset, len(text)))
+
+    start = 0
+    end = len(text)
+    for match in SENTENCE_END_RE.finditer(text):
+        if not _is_sentence_end(text, match):
+            continue
+        if match.end() <= offset:
+            start = match.end()
+        else:
+            end = match.end()
+            break
+    while start < offset and text[start].isspace():
+        start += 1
+    return text[start:end].strip()
 
 
 class Dictionary:
@@ -396,9 +450,15 @@ class ConsoleReader:
         self.panel_entry = None
         self.panel_status = ""
         self.panel_source = ""
+        self.panel_sentence = ""
+        self.panel_translation = ""
+        self.panel_translate_status = ""
         self.dirty = True
         self.too_small = False
         self._last_click = (0.0, -1, -1)
+        self._press = None
+        self._press_fired = False
+        self._translation_cache = {}
         self._vt_buf = ""
 
     # ------------------------------------------------------------ 生命周期
@@ -454,6 +514,13 @@ class ConsoleReader:
     def _wait_events(self):
         records = (INPUT_RECORD * 32)()
         while True:
+            result = _kernel32.WaitForSingleObject(self.hin, self._press_timeout())
+            if result == WAIT_TIMEOUT:
+                if self._check_long_press():
+                    return True
+                continue
+            if result != WAIT_OBJECT_0:
+                raise RuntimeError("读取终端输入失败")
             count = wintypes.DWORD()
             if not _kernel32.ReadConsoleInputW(self.hin, records, 32, ctypes.byref(count)):
                 raise RuntimeError("读取终端输入失败")
@@ -462,6 +529,21 @@ class ConsoleReader:
                     return False
             if self.dirty:
                 return True
+
+    def _press_timeout(self):
+        if not self._press or self._press_fired:
+            return 500
+        remaining = LONG_PRESS_SECONDS - (time.monotonic() - self._press[0])
+        return max(10, int(remaining * 1000))
+
+    def _check_long_press(self):
+        if not self._press or self._press_fired:
+            return False
+        started, x, y = self._press
+        if time.monotonic() - started < LONG_PRESS_SECONDS:
+            return False
+        self._press_fired = True
+        return self._long_press(x, y)
 
     def _handle(self, record):
         if record.EventType == KEY_EVENT:
@@ -513,12 +595,20 @@ class ConsoleReader:
         return self._handle_plain(ch, 0)
 
     def _vt_mouse(self, button, x, y, kind):
-        if kind == "m" or button & 32:
+        if kind == "m" or (button & 3) == 3:
+            self._press = None
+            return
+        if button & 32:
+            self._press_move(x, y)
             return
         if button & 64:
-            self._scroll(-3 if (button & 1) == 0 else 3)
+            self._wheel(-3 if (button & 1) == 0 else 3, x, y)
             return
-        if (button & 3) in (0, 2):
+        if (button & 3) == 0:
+            self._press = (time.monotonic(), x, y)
+            self._press_fired = False
+            self._click(x, y, double=False)
+        elif (button & 3) == 2:
             self._click(x, y, double=False)
 
     def _handle_plain(self, ch, vk):
@@ -543,13 +633,39 @@ class ConsoleReader:
         x, y = mouse.dwMousePosition.X, mouse.dwMousePosition.Y
         if flags & MOUSE_WHEELED:
             delta = ctypes.c_short((mouse.dwButtonState >> 16) & 0xFFFF).value
-            self._scroll(-3 if delta > 0 else 3)
+            self._wheel(-3 if delta > 0 else 3, x, y)
         elif flags & MOUSE_MOVED:
-            return
+            self._press_move(x, y)
         elif flags & DOUBLE_CLICK:
+            self._press = None
             self._click(x, y, double=True)
-        elif flags == 0 and mouse.dwButtonState & (LEFT_BUTTON | RIGHT_BUTTON):
-            self._click(x, y, double=False)
+        elif flags == 0:
+            if mouse.dwButtonState & (LEFT_BUTTON | RIGHT_BUTTON):
+                if mouse.dwButtonState & LEFT_BUTTON:
+                    self._press = (time.monotonic(), x, y)
+                    self._press_fired = False
+                self._click(x, y, double=False)
+            else:
+                self._press = None
+
+    def _press_move(self, x, y):
+        if not self._press:
+            return
+        _, press_x, press_y = self._press
+        if abs(x - press_x) > 1 or abs(y - press_y) > 1:
+            self._press = None
+
+    def _wheel(self, step, x, y):
+        self._scroll(step)
+
+    def _line_count(self):
+        return len(self.lines)
+
+    def _line_text(self, index):
+        return self.lines[index] if 0 <= index < len(self.lines) else ""
+
+    def _sentence_at(self, index, char_index):
+        return sentence_at(self.lines, index, char_index)
 
     def _click(self, x, y, double):
         if not self._is_double_click(x, y, double):
@@ -561,10 +677,55 @@ class ConsoleReader:
             self._clear_panel()
             return
         index = self.top + row
-        if index >= len(self.lines):
+        if index >= self._line_count():
             self._clear_panel()
             return
-        self._lookup_line(self.lines[index], index, col)
+        self._lookup_line(self._line_text(index), index, col)
+
+    def _long_press(self, x, y):
+        row = y - self.origin[1] - self.HEADER_ROWS
+        col = x - self.origin[0]
+        if self.too_small or not (0 <= row < self.body_h and 0 <= col < self.left_w):
+            return False
+        index = self.top + row
+        if index >= self._line_count():
+            return False
+        picked = self._word_at(self._line_text(index), col)
+        if not picked:
+            return False
+        word, start, end = picked
+        sentence = self._sentence_at(index, start)
+        if not sentence:
+            return False
+
+        self.sel = (index, start, end)
+        self.panel_word = word
+        self.panel_entry = self.dictionary.lookup(word)
+        self.panel_status = ""
+        self.panel_source = ""
+        self.panel_sentence = sentence
+        self.panel_translation = self._translation_cache.get(sentence, "")
+        self.panel_translate_status = "" if self.panel_translation else "正在翻译整句…"
+        self._build_panel()
+        self._draw()
+        if not self.panel_translation:
+            self._translate(sentence)
+        return True
+
+    def _translate(self, sentence):
+        try:
+            translated = translate_sentence(sentence)
+        except OnlineLookupError as exc:
+            self.panel_translate_status = f"整句翻译失败（{exc}），请稍后重试"
+        else:
+            if translated:
+                self._translation_cache[sentence] = translated
+                self.panel_translation = translated
+                self.panel_translate_status = ""
+            else:
+                self.panel_translate_status = "未获取到整句译文"
+        self._build_panel()
+        self.dirty = True
 
     def _is_double_click(self, x, y, double):
         now = time.monotonic()
@@ -589,6 +750,9 @@ class ConsoleReader:
         self.panel_entry = self.dictionary.lookup(word)
         self.panel_status = ""
         self.panel_source = ""
+        self.panel_sentence = ""
+        self.panel_translation = ""
+        self.panel_translate_status = ""
         self._build_panel()
         if not (self.panel_entry and self.panel_entry["meanings"]):
             self._lookup_online(word)
@@ -626,6 +790,9 @@ class ConsoleReader:
         self.panel_entry = None
         self.panel_status = ""
         self.panel_source = ""
+        self.panel_sentence = ""
+        self.panel_translation = ""
+        self.panel_translate_status = ""
         self._build_panel()
         self.dirty = True
 
@@ -670,6 +837,9 @@ class ConsoleReader:
                 self.panel_entry = None
                 self.panel_status = ""
                 self.panel_source = ""
+                self.panel_sentence = ""
+                self.panel_translation = ""
+                self.panel_translate_status = ""
         self.top = max(0, min(self.top, max(0, len(self.lines) - body_h)))
         self._build_panel()
         self.dirty = True
@@ -697,7 +867,21 @@ class ConsoleReader:
         rows = []
         if self.sel:
             entry = self.panel_entry
-            rows.append((self.panel_word, S_YELLOW))
+            if self.panel_sentence:
+                rows.append(("整句翻译", S_YELLOW))
+                if self.panel_translation:
+                    rows.extend((line, "") for line
+                                in wrap_display(self.panel_translation, inner))
+                elif self.panel_translate_status:
+                    rows.extend((line, S_GREY) for line
+                                in wrap_display(self.panel_translate_status, inner))
+                rows.append(("", ""))
+                rows.extend((line, S_GREY) for line
+                            in wrap_display(self.panel_sentence, inner))
+                rows.append(("", ""))
+                rows.append((f"单词 {self.panel_word}", S_YELLOW))
+            else:
+                rows.append((self.panel_word, S_YELLOW))
             if entry:
                 phonetics = " ".join(p for p in (
                     f"英 {entry['uk']}" if entry["uk"] else "",
@@ -733,7 +917,7 @@ class ConsoleReader:
                     fit("请放大终端后继续，按 q 退出", self.width, S_GREY)]
         rows = [
             fit(self.title, self.width, S_CYAN),
-            fit("双击单词查释义 | 点击别处隐藏 | 方向键/PgUp/PgDn/滚轮翻页 | 回车/q 返回",
+            fit("双击单词查释义 | 长按单词翻译整句 | 点击别处隐藏 | 方向键/PgUp/PgDn/滚轮翻页 | 回车/q 返回",
                 self.width, S_GREY),
         ]
         for i in range(self.body_h):

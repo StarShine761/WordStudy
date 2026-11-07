@@ -3,6 +3,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import sqlite3
 import tempfile
 import unittest
@@ -55,30 +56,19 @@ READING_BODY = (
 )
 
 FAKE_PASSAGE = (
-    "Modern companies face an urgent question: how should an office be "
-    "designed when external pressure never stops? A useful answer begins with "
-    "a simple idea. Every employee is equal in the need for a calm place to "
-    "think, yet every person adapts to noise in a different way. This is not "
-    "merely a matter of comfort. A growing body of evidence shows that "
-    "constant interruption has a severe effect on attention, and the technique "
-    "of deep work cannot exist without protected time.\n\n"
-    "The designers of a new office in Manchester started from this principle. "
-    "They wanted to create a space that would regulate sound and light without "
-    "relying on expensive technology. The result is beneficial in several "
-    "ways. Small quiet rooms give people a place to work when a task is "
-    "urgent, while open tables encourage conversation when a team needs to "
-    "share resources. Staff soon became more aware of how their own habits "
-    "affected colleagues. Instead of waiting for an external rule, they began "
-    "to adapt their routine. The change was gradual; at first, progress seemed "
-    "to crawl. Within a year, however, the company reported fewer sick days "
-    "and better concentration.\n\n"
-    "The experiment offers a lesson that applies far beyond one office. Good "
-    "design is not a luxury; it is a practical resource. A calm environment "
-    "does not remove pressure, but it gives people the space to respond to it. "
-    "When workers are equal partners in shaping the place where they work, "
-    "they are more likely to adapt, to share evidence and to regulate their "
-    "own behaviour. The urgent task for employers is therefore not to add more "
-    "rules, but to design conditions in which good judgment can exist."
+    "Modern offices face an urgent question. How should a room be designed "
+    "when external pressure never stops? A useful answer starts with a simple "
+    "idea. Every worker is equal in the need for a calm place to think, yet "
+    "each person adapts to noise in a different way. This is not only about "
+    "comfort. Evidence shows that constant noise has a severe effect on focus, "
+    "and the technique of deep work cannot exist without quiet time.\n\n"
+    "Designers in a small town started from this rule. They wanted a space "
+    "that would regulate sound without costly technology. The result is "
+    "beneficial in several ways. Quiet rooms give people a place to work when "
+    "a task is urgent, while open tables help a team share resources. Staff "
+    "soon became aware of how their habits affected others. Change was slow "
+    "at first; progress seemed to crawl. In time, the company reported better "
+    "focus."
 )
 
 FAKE_RESULT = {
@@ -89,11 +79,10 @@ FAKE_RESULT = {
                    "一个有用的答案始于一个简单的想法。每个员工都同样需要一个安静思考的地方，"
                    "但每个人适应噪音的方式不同。",
     "word_sentences": {
-        "urgent": "Modern companies face an urgent question: how should an "
-                  "office be designed when external pressure never stops?",
-        "calm": "Every employee is equal in the need for a calm place to "
-                "think, yet every person adapts to noise in a different way.",
-        "crawl": "The change was gradual; at first, progress seemed to crawl.",
+        "urgent": "Modern offices face an urgent question.",
+        "calm": "Every worker is equal in the need for a calm place to think, "
+                "yet each person adapts to noise in a different way.",
+        "crawl": "Change was slow at first; progress seemed to crawl.",
     },
 }
 
@@ -187,17 +176,36 @@ class DailyPassageTests(unittest.TestCase):
     def _build_vocab_db(self):
         conn = sqlite3.connect(self.vocab_db)
         conn.execute(
-            "CREATE TABLE VOC_TB (vc_id TEXT PRIMARY KEY, vc_interpretation TEXT)"
+            "CREATE TABLE VOC_TB (vc_id TEXT PRIMARY KEY, "
+            "vc_vocabulary TEXT, vc_interpretation TEXT)"
         )
         for index, word in enumerate(NEW_WORDS, 1):
             conn.execute(
-                "INSERT INTO VOC_TB VALUES (?, ?)",
-                (f"new-{index}", MEANINGS[word]),
+                "INSERT INTO VOC_TB VALUES (?, ?, ?)",
+                (f"new-{index}", word, MEANINGS[word]),
             )
         for index, word in enumerate(REVIEW_WORDS, 1):
             conn.execute(
-                "INSERT INTO VOC_TB VALUES (?, ?)",
-                (f"old-{index}", MEANINGS[word]),
+                "INSERT INTO VOC_TB VALUES (?, ?, ?)",
+                (f"old-{index}", word, MEANINGS[word]),
+            )
+        conn.execute(
+            'CREATE TABLE BK_TB (id TEXT PRIMARY KEY, name TEXT, "order" REAL)'
+        )
+        conn.execute(
+            'CREATE TABLE BK_VOC_TB (book_id TEXT, voc_id TEXT, "order" INTEGER)'
+        )
+        conn.execute(
+            "INSERT INTO BK_TB VALUES ('coca-test', 'COCA 20000高频词', 1)"
+        )
+        for index, word in enumerate(("the", "office", "calm"), 1):
+            conn.execute(
+                "INSERT INTO VOC_TB VALUES (?, ?, ?)",
+                (f"basic-{index}", word, word),
+            )
+            conn.execute(
+                "INSERT INTO BK_VOC_TB VALUES ('coca-test', ?, ?)",
+                (f"basic-{index}", index),
             )
         conn.commit()
         conn.close()
@@ -222,6 +230,48 @@ class DailyPassageTests(unittest.TestCase):
         self.assertEqual(self.daily._target_count(), 30)
         self.daily._save_config({"daily_passage_word_count": 1})
         self.assertEqual(self.daily._target_count(), 8)
+
+    # ---------------------------------------------------------------- 词汇限制
+
+    def test_learned_words_newest_first(self):
+        words = self.daily._learned_words()
+        self.assertEqual(words[:10], list(reversed(NEW_WORDS)))
+        self.assertEqual(words[10:], list(reversed(REVIEW_WORDS)))
+
+    def test_basic_words_reads_coca_book(self):
+        basic = self.daily._basic_words()
+        self.assertTrue({"the", "office", "calm"} <= basic)
+        self.assertIn("an", basic)
+
+    def test_allowed_vocabulary_includes_targets_learned_and_basic(self):
+        allowed = self.daily._allowed_vocabulary(["design"])
+        for word in ("design", "resource", "technique", "the", "office"):
+            self.assertIn(word, allowed)
+
+    def test_unknown_words_flags_only_out_of_list_terms(self):
+        allowed = {
+            "the", "office", "is", "calm", "and", "workers", "use",
+            "simple", "words", "but",
+        }
+        unknown = self.daily._unknown_words(
+            "The office is calm and workers use simple words, but mitigation.",
+            allowed,
+        )
+        self.assertEqual(unknown, ["mitigation"])
+
+    def test_unknown_words_allows_hyphenated_common_words(self):
+        self.assertEqual(
+            self.daily._unknown_words("long-term plan", {"long", "term", "plan"}),
+            [],
+        )
+
+    def test_prompt_uses_short_length_and_known_words(self):
+        targets = self.daily.select_target_words(15)
+        prompt = self.daily._build_user_prompt(targets, None)
+        self.assertIn("120-150", prompt)
+        self.assertIn("LEARNER'S KNOWN WORDS", prompt)
+        self.assertIn("newest to oldest", prompt)
+        self.assertIn(NEW_WORDS[-1], prompt)
 
     # ---------------------------------------------------------------- 词形
 
@@ -273,25 +323,29 @@ class DailyPassageTests(unittest.TestCase):
 
     def test_mock_generation_covers_all_targets(self):
         targets = self.daily.select_target_words(15)
-        with patch.object(
-            self.daily, "_call_deepseek",
-            return_value=json.dumps(FAKE_RESULT, ensure_ascii=False),
-        ):
+        passage_words = set(re.findall(r"[A-Za-z]+", FAKE_PASSAGE.lower()))
+        with patch.object(self.daily, "_basic_words", return_value=passage_words), \
+                patch.object(
+                    self.daily, "_call_deepseek",
+                    return_value=json.dumps(FAKE_RESULT, ensure_ascii=False),
+                ):
             result, model = self.daily._generate_with_ai(
                 targets, source=None, key="sk-test"
             )
         _, missing, count = self.daily._score_result(result, targets)
         self.assertEqual(missing, [])
-        self.assertGreaterEqual(count, 280)
-        self.assertLessEqual(count, 320)
+        self.assertGreaterEqual(count, 120)
+        self.assertLessEqual(count, 150)
         self.assertEqual(model, "deepseek-chat")
 
     def test_cache_display_and_key_is_not_persisted(self):
         targets = self.daily.select_target_words(15)
-        with patch.object(
-            self.daily, "_call_deepseek",
-            return_value=json.dumps(FAKE_RESULT, ensure_ascii=False),
-        ):
+        passage_words = set(re.findall(r"[A-Za-z]+", FAKE_PASSAGE.lower()))
+        with patch.object(self.daily, "_basic_words", return_value=passage_words), \
+                patch.object(
+                    self.daily, "_call_deepseek",
+                    return_value=json.dumps(FAKE_RESULT, ensure_ascii=False),
+                ):
             result, model = self.daily._generate_with_ai(
                 targets, source=None, key="sk-test"
             )

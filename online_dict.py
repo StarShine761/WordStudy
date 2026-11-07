@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""联网查词：调用有道词典公开接口，返回中文释义与音标。
+"""联网查词与整句翻译：调用有道公开接口，返回中文释义与音标。
 
-仅使用标准库，供阅读器在离线词库没有释义时补全。
+仅使用标准库，供阅读器在离线词库没有释义时补全，并支持长按翻译整句。
 """
 
 import html
@@ -16,6 +16,9 @@ import urllib.request
 API_URL = "https://dict.youdao.com/jsonapi?q={}"
 SUGGEST_URL = ("https://dict.youdao.com/suggest?num=5&ver=3.0"
                "&doctype=json&cache=false&le=en&q={}")
+TRANSLATE_URL = "https://aidemo.youdao.com/trans?q={}&from=en&to=zh-CHS"
+TRANSLATE_FALLBACK_URL = ("https://api.mymemory.translated.net/get"
+                          "?q={}&langpair=en%7Czh-CN")
 TIMEOUT = 5.0
 
 _MARKUP_RE = re.compile(
@@ -84,6 +87,25 @@ def parse_suggest_payload(data, query):
     return None
 
 
+def parse_translation_payload(data):
+    """从有道翻译响应里取译文；没有结果返回 None。"""
+    translation = data.get("translation")
+    if isinstance(translation, str):
+        translation = [translation]
+    if not isinstance(translation, list):
+        return None
+    text = "".join(str(part) for part in translation if part)
+    return _clean(text) or None
+
+
+def parse_mymemory_payload(data):
+    """从 MyMemory 响应里取译文；额度用尽或状态异常返回 None。"""
+    if str(data.get("responseStatus")) != "200" or data.get("quotaFinished"):
+        return None
+    text = (data.get("responseData") or {}).get("translatedText") or ""
+    return _clean(text) or None
+
+
 def _request_json(url, timeout):
     request = urllib.request.Request(url, headers={
         "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -148,4 +170,34 @@ def fetch(word, timeout=TIMEOUT):
         return entry
     if last_error:
         raise last_error
+    return None
+
+
+def translate(text, timeout=TIMEOUT):
+    """整句翻译成中文。查不到返回 None，网络异常抛 OnlineLookupError。"""
+    query = str(text or "").strip()
+    if not query:
+        return None
+    quoted = urllib.parse.quote(query)
+
+    first_error = None
+    try:
+        data = _request_json(TRANSLATE_URL.format(quoted), timeout)
+        translated = parse_translation_payload(data)
+        if translated:
+            return translated
+    except OnlineLookupError as exc:
+        first_error = exc
+
+    # 有道 demo 接口限流或不可用时，用 MyMemory 兜底
+    try:
+        data = _request_json(TRANSLATE_FALLBACK_URL.format(quoted), timeout)
+        translated = parse_mymemory_payload(data)
+        if translated:
+            return translated
+    except OnlineLookupError as exc:
+        if first_error is None:
+            first_error = exc
+    if first_error is not None:
+        raise first_error
     return None

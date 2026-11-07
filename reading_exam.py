@@ -5,13 +5,10 @@
 原文与题目全部展开成一页，滚轮/翻页键滚动整页，不再分上下两个独立滚动区。
 """
 
-import ctypes
-
 from reading_viewer import (
-    ConsoleReader, Dictionary, DOUBLE_CLICK, LEFT_BUTTON, MOUSE_MOVED, MOUSE_WHEELED,
-    RIGHT_BUTTON, S_CYAN, S_DIM, S_GREY, S_RESET, S_REV, S_YELLOW,
+    ConsoleReader, Dictionary, S_CYAN, S_DIM, S_GREY, S_RESET, S_REV, S_YELLOW,
     VK_DOWN, VK_END, VK_HOME, VK_NEXT, VK_PRIOR, VK_UP,
-    clip_display, disp_width, fit, wrap_display,
+    clip_display, disp_width, fit, sentence_at, wrap_display,
 )
 
 S_GREEN = "\x1b[1;32m"
@@ -70,6 +67,9 @@ class ExamReader(ConsoleReader):
                 self.panel_entry = None
                 self.panel_status = ""
                 self.panel_source = ""
+                self.panel_sentence = ""
+                self.panel_translation = ""
+                self.panel_translate_status = ""
         self._build_doc()
         self.top = max(0, min(self.top, max(0, len(self.doc) - self.body_h)))
         self._build_panel()
@@ -227,47 +227,21 @@ class ExamReader(ConsoleReader):
 
     # ------------------------------------------------------------ 鼠标
 
-    def _click(self, x, y, double):
-        if not self._is_double_click(x, y, double):
-            self._clear_panel()
-            return
-        row = y - self.origin[1] - self.HEADER_ROWS
-        col = x - self.origin[0]
-        if self.too_small or not (0 <= row < self.body_h and 0 <= col < self.left_w):
-            self._clear_panel()
-            return
-        index = self.top + row
-        if index >= len(self.doc):
-            self._clear_panel()
-            return
-        self._lookup_line(self.doc[index][0], index, col)
+    def _line_count(self):
+        return len(self.doc)
+
+    def _line_text(self, index):
+        return self.doc[index][0] if 0 <= index < len(self.doc) else ""
+
+    def _sentence_at(self, index, char_index):
+        if index < self.passage_n:
+            return sentence_at(self.lines, index, char_index)
+        return sentence_at([self._line_text(index)], 0, char_index)
 
     def _wheel(self, step, x, y):
         if x - self.origin[0] >= self.left_w + self.gap_w + 1:
             return
         self._scroll(step)
-
-    def _vt_mouse(self, button, x, y, kind):
-        if kind == "m" or button & 32:
-            return
-        if button & 64:
-            self._wheel(-3 if (button & 1) == 0 else 3, x, y)
-            return
-        if (button & 3) in (0, 2):
-            self._click(x, y, double=False)
-
-    def _handle_mouse(self, mouse):
-        flags = mouse.dwEventFlags
-        x, y = mouse.dwMousePosition.X, mouse.dwMousePosition.Y
-        if flags & MOUSE_WHEELED:
-            wheel = ctypes.c_short((mouse.dwButtonState >> 16) & 0xFFFF).value
-            self._wheel(-3 if wheel > 0 else 3, x, y)
-        elif flags & MOUSE_MOVED:
-            return
-        elif flags & DOUBLE_CLICK:
-            self._click(x, y, double=True)
-        elif flags == 0 and mouse.dwButtonState & (LEFT_BUTTON | RIGHT_BUTTON):
-            self._click(x, y, double=False)
 
     # ------------------------------------------------------------ 绘制
 
@@ -294,7 +268,7 @@ class ExamReader(ConsoleReader):
                     fit("请放大终端后继续，Ctrl+C 退出", self.width, S_GREY)]
         rows = [
             fit(self.title, self.width, S_CYAN),
-            fit("双击任意文字查词 | 滚轮/方向键滚动 | Tab 跳到当前题 | 输入答案回车提交 | Ctrl+C 退出",
+            fit("双击查词 | 长按单词翻译整句 | 滚轮/方向键滚动 | Tab 跳到当前题 | 输入答案回车提交 | Ctrl+C 退出",
                 self.width, S_GREY),
         ]
         for i in range(self.body_h):

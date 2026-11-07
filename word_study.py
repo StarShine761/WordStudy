@@ -18,6 +18,7 @@ import ctypes
 import shutil
 import threading
 import unicodedata
+import wave
 from datetime import datetime
 from pathlib import Path
 from typing import List
@@ -52,6 +53,7 @@ if sys.platform == 'win32':
 # Windows 原生音频播放（MCI/DirectShow）：避免 PortAudio 在蓝牙设备上
 # 走 MME 共享模式时的重采样与抖动，那正是随机卡顿和电流声的来源
 if sys.platform == 'win32':
+    import winsound
     _winmm = ctypes.WinDLL('winmm')
     _winmm.mciSendStringW.argtypes = [
         ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint, ctypes.c_void_p
@@ -324,6 +326,8 @@ class WordStudyApp:
         self._tts_state_lock = threading.Lock()
         self._speak_seq = 0
         self._tts_warned = set()
+        self._keepalive_active = False
+        self._keepalive_lock = threading.Lock()
 
         # 从配置文件读取保存的语速，默认1.0x（正常速度）
         self.tts_speed = 1.0
@@ -341,6 +345,7 @@ class WordStudyApp:
             print(f"Edge TTS 初始化失败: {e}")
 
         self._check_output_device()
+        self._ensure_audio_keepalive()
 
     def _check_output_device(self):
         """启动时确认存在可用的播放设备，避免无声且无提示"""
@@ -364,6 +369,38 @@ class WordStudyApp:
             return
         self._tts_warned.add(key)
         print(message)
+
+    def _keepalive_wav_path(self) -> Path:
+        """2 秒静音 WAV：循环播放以阻止蓝牙耳机在词间休眠"""
+        path = self.tts_cache_dir / "keepalive_silence.wav"
+        if not path.exists() or path.stat().st_size == 0:
+            with wave.open(str(path), 'wb') as f:
+                f.setnchannels(1)
+                f.setsampwidth(2)
+                f.setframerate(22050)
+                f.writeframes(b'\x00\x00' * 22050 * 2)
+        return path
+
+    def _ensure_audio_keepalive(self):
+        """保持音频链路常热：蓝牙耳机无流时会休眠，导致单词开头或整词无声
+
+        用 winsound 在独立 waveOut 通道循环静音 WAV，与 MCI 的单词播放
+        互不干扰（MCI 打开/关闭单词别名会让 MCI 内的常驻别名失效）。
+        """
+        if sys.platform != 'win32' or not self.tts_voice:
+            return
+        with self._keepalive_lock:
+            if self._keepalive_active:
+                return
+            try:
+                path = self._keepalive_wav_path()
+                winsound.PlaySound(
+                    str(path),
+                    winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_LOOP,
+                )
+                self._keepalive_active = True
+            except Exception as e:
+                self._warn_tts("keepalive", f"音频链路保活失败: {e}")
     
     def init_study_db(self):
         """初始化学习数据库（自动迁移到 FSRS 表结构）"""
@@ -453,32 +490,14 @@ class WordStudyApp:
 
     def _play_cached(self, path: Path, seq: int, interruptible: bool = True):
         alias = f"tts{os.getpid()}_{seq}"
+        self._ensure_audio_keepalive()
         with self._play_lock:
             # 连按跳过时，已有更新的请求在等，就不播这条旧音频
             if interruptible and seq != self._speak_seq:
                 return
             _mci_send(f'open "{path}" type mpegvideo alias {alias}')
             try:
-                # 蓝牙耳机在新建播放图后的前几百毫秒容易丢帧，听起来像单词开头
-                # 被吃掉。先静音预跑一小段把音频链路跑热，再从 0 正式发声。
-                muted = True
-                try:
-                    _mci_send(f'setaudio {alias} volume to 0')
-                except OSError:
-                    muted = False
                 _mci_send(f'play {alias}')
-                if muted:
-                    warmup_deadline = time.monotonic() + 0.35
-                    while time.monotonic() < warmup_deadline:
-                        if interruptible and seq != self._speak_seq:
-                            return
-                        time.sleep(0.05)
-                    try:
-                        _mci_send(f'play {alias} from 0')
-                    except OSError:
-                        _mci_send(f'stop {alias}')
-                        _mci_send(f'play {alias}')
-                    _mci_send(f'setaudio {alias} volume to 1000')
                 try:
                     length_ms = int(_mci_send(f'status {alias} length') or 0)
                 except (OSError, ValueError):
@@ -488,7 +507,8 @@ class WordStudyApp:
                 idle = 0
                 while time.monotonic() < deadline:
                     if interruptible and seq != self._speak_seq:
-                        self._fade_out(alias)
+                        if started:
+                            self._fade_out(alias)
                         return
                     mode = _mci_send(f'status {alias} mode')
                     if mode == 'playing':
@@ -496,8 +516,10 @@ class WordStudyApp:
                         idle = 0
                     else:
                         idle += 1
-                        # 播放已结束，或 200ms 内始终没进入 playing（极短音频）
-                        if started or idle >= 4:
+                        if started:
+                            break
+                        # 蓝牙起播可能明显慢于 200ms，先宽限到 1.5 秒再放弃
+                        if idle >= 30:
                             break
                     time.sleep(0.05)
             finally:

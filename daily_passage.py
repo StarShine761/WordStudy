@@ -34,7 +34,58 @@ DEFAULT_MODEL = "deepseek-chat"
 DEFAULT_WORD_COUNT = 15
 MIN_TARGET_WORDS = 8
 MAX_TARGET_WORDS = 30
-SOURCE_WINDOW = 300
+SOURCE_WINDOW = 150
+PASSAGE_MIN_WORDS = 120
+PASSAGE_MAX_WORDS = 150
+PASSAGE_TARGET_WORDS = 135
+PASSAGE_ACCEPT_MIN = 110
+PASSAGE_ACCEPT_MAX = 160
+MAX_UNKNOWN_WORDS = 2
+BASIC_WORD_LIMIT = 3000
+PROMPT_LEARNED_LIMIT = 300
+
+_FUNCTION_WORDS = {
+    "a", "an", "the", "and", "or", "but", "if", "of", "to", "in", "on",
+    "at", "for", "with", "from", "by", "as", "is", "are", "was", "were",
+    "be", "been", "being", "am", "do", "does", "did", "done", "have",
+    "has", "had", "can", "could", "will", "would", "shall", "should",
+    "may", "might", "must", "cannot", "not", "no", "yes", "this", "that",
+    "these", "those", "it", "its", "i", "you", "he", "she", "we", "they",
+    "me", "him", "us", "them", "my", "your", "his", "her", "our", "their",
+    "who", "whom", "whose", "which", "what", "when", "where", "why", "how",
+    "there", "here", "than", "then", "so", "too", "very", "just", "also",
+    "only", "more", "most", "some", "any", "all", "both", "each", "every",
+    "other", "another", "such", "own", "same", "up", "down", "out", "over",
+    "under", "again", "once", "about", "into", "through", "during",
+    "before", "after", "above", "below", "between", "among", "against",
+    "because", "while", "although", "though", "unless", "until", "since",
+    "whether", "however", "therefore", "thus", "per", "via",
+}
+
+_IRREGULAR_BASES = {
+    "was": "be", "were": "be", "been": "be", "being": "be", "am": "be",
+    "has": "have", "had": "have", "does": "do", "did": "do", "done": "do",
+    "became": "become", "began": "begin", "begun": "begin", "broke": "break",
+    "broken": "break", "brought": "bring", "built": "build", "bought": "buy",
+    "caught": "catch", "chose": "choose", "chosen": "choose", "came": "come",
+    "dealt": "deal", "drew": "draw", "drawn": "draw", "drove": "drive",
+    "driven": "drive", "ate": "eat", "eaten": "eat", "fell": "fall",
+    "fallen": "fall", "felt": "feel", "fought": "fight", "found": "find",
+    "flew": "fly", "flown": "fly", "got": "get", "gotten": "get",
+    "gave": "give", "given": "give", "went": "go", "gone": "go",
+    "grew": "grow", "grown": "grow", "heard": "hear", "held": "hold",
+    "kept": "keep", "knew": "know", "known": "know", "led": "lead",
+    "left": "leave", "lost": "lose", "made": "make", "meant": "mean",
+    "met": "meet", "paid": "pay", "ran": "run", "said": "say",
+    "saw": "see", "seen": "see", "sold": "sell", "sent": "send",
+    "sat": "sit", "slept": "sleep", "spoke": "speak", "spoken": "speak",
+    "spent": "spend", "stood": "stand", "stole": "steal", "stolen": "steal",
+    "swam": "swim", "swum": "swim", "took": "take", "taken": "take",
+    "taught": "teach", "told": "tell", "thought": "think", "threw": "throw",
+    "thrown": "throw", "understood": "understand", "woke": "wake",
+    "woken": "wake", "won": "win", "wore": "wear", "worn": "wear",
+    "wrote": "write", "written": "write",
+}
 
 SYSTEM_PROMPT = (
     "You are an experienced IELTS Academic Reading passage writer and editor. "
@@ -183,6 +234,41 @@ def _word_in_text(word, text):
     return any(pattern.search(text) for pattern in _patterns(word))
 
 
+def _token_bases(token):
+    word = str(token or "").strip("'-").lower().replace("’", "'")
+    if not word:
+        return set()
+    bases = {word}
+    if word in _IRREGULAR_BASES:
+        bases.add(_IRREGULAR_BASES[word])
+    if word.endswith("'s"):
+        bases.add(word[:-2])
+    if word.endswith("n't"):
+        bases.add(word[:-3])
+        if word in {"won't", "can't", "shan't"}:
+            bases.add({"won't": "will", "can't": "can", "shan't": "shall"}[word])
+    if word.endswith("ies"):
+        bases.add(word[:-3] + "y")
+    if word.endswith("ied"):
+        bases.add(word[:-3] + "y")
+    if word.endswith("es"):
+        bases.add(word[:-2])
+    if word.endswith("s") and not word.endswith("ss"):
+        bases.add(word[:-1])
+    for suffix in ("ed", "ing"):
+        if word.endswith(suffix) and len(word) > len(suffix) + 2:
+            stem = word[:-len(suffix)]
+            bases.add(stem)
+            bases.add(stem + "e")
+            if len(stem) > 2 and stem[-1] == stem[-2]:
+                bases.add(stem[:-1])
+    if word.endswith("ly"):
+        bases.add(word[:-2])
+    if word.endswith("ily"):
+        bases.add(word[:-3] + "y")
+    return {base for base in bases if base}
+
+
 def _sentence_for(word, text):
     for sentence in re.split(r"(?<=[.!?])\s+", _clean_space(text)):
         sentence = sentence.strip()
@@ -210,6 +296,7 @@ class DailyPassage:
         self.config_path = config_path or os.path.join(here, "user_config.json")
         self.conn = sqlite3.connect(study_db_path)
         self.conn.row_factory = sqlite3.Row
+        self._basic_cache = None
         self._ensure_table()
 
     # ------------------------------------------------------------ 数据表
@@ -263,6 +350,19 @@ class DailyPassage:
             ).fetchone()
         except sqlite3.Error:
             return None
+
+    def _current_cached(self):
+        row = self._get_cached(self._today())
+        if row is None:
+            return None
+        try:
+            body = row["body"]
+        except (IndexError, KeyError, TypeError):
+            return None
+        count = _word_count(body)
+        if PASSAGE_ACCEPT_MIN <= count <= PASSAGE_ACCEPT_MAX:
+            return row
+        return None
 
     def close(self):
         try:
@@ -343,8 +443,7 @@ class DailyPassage:
 
     def _run_menu(self):
         while True:
-            today = self._today()
-            cached = self._get_cached(today)
+            cached = self._current_cached()
             targets = self.select_target_words(self._target_count())
             new_count = sum(1 for item in targets if item["tag"] == "新学")
             review_count = sum(1 for item in targets if item["tag"] == "今日复习")
@@ -631,7 +730,7 @@ class DailyPassage:
 
         if not best:
             return None
-        min_source = max(2, min(4, int(len(words) * 0.25 + 0.5)))
+        min_source = max(2, min(3, int(len(words) * 0.25 + 0.5)))
         if len(best["matched"]) < min_source:
             return None
         return best
@@ -727,8 +826,8 @@ class DailyPassage:
         print("设置目标词数量")
         print("=" * 60)
         print(f"当前：每篇短文使用 {current} 个目标词")
-        print(f"范围：{MIN_TARGET_WORDS}-{MAX_TARGET_WORDS}；建议 12-18")
-        print("词越多，短文越密；300 词正文建议 15 个左右。")
+        print(f"范围：{MIN_TARGET_WORDS}-{MAX_TARGET_WORDS}；建议 8-15")
+        print("词越多，短文越密；120-150 词正文建议 8-15 个。")
         print("=" * 60)
         value = input("请输入新的数量（直接回车取消）: ").strip()
         if not value:
@@ -744,15 +843,110 @@ class DailyPassage:
         self._save_config({"daily_passage_word_count": count})
         print(f"已设置为 {count} 个目标词")
 
+    def _learned_words(self):
+        try:
+            rows = self.conn.execute(
+                "SELECT vocabulary FROM study_list "
+                "ORDER BY COALESCE(add_date, '') DESC, id DESC"
+            ).fetchall()
+        except sqlite3.Error:
+            return []
+        return [
+            str(row[0]).strip().lower()
+            for row in rows
+            if row[0] and str(row[0]).strip()
+        ]
+
+    def _basic_words(self):
+        if self._basic_cache is not None:
+            return self._basic_cache
+        words = set()
+        try:
+            conn = sqlite3.connect(
+                f"file:{self.vocab_db_path}?mode=ro", uri=True
+            )
+            try:
+                book = conn.execute(
+                    "SELECT id FROM BK_TB WHERE name LIKE 'COCA%' "
+                    "ORDER BY \"order\" LIMIT 1"
+                ).fetchone()
+                if book:
+                    rows = conn.execute(
+                        "SELECT v.vc_vocabulary FROM BK_VOC_TB bv "
+                        "JOIN VOC_TB v ON v.vc_id = bv.voc_id "
+                        "WHERE bv.book_id = ? ORDER BY bv.\"order\" LIMIT ?",
+                        (book[0], BASIC_WORD_LIMIT),
+                    ).fetchall()
+                    words = {
+                        str(row[0]).strip().lower()
+                        for row in rows
+                        if row[0] and str(row[0]).strip()
+                    }
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            words = set()
+        words.update(_FUNCTION_WORDS)
+        self._basic_cache = words
+        return words
+
+    def _allowed_vocabulary(self, target_words):
+        allowed = set()
+        for word in target_words:
+            allowed.add(str(word).strip().lower())
+            allowed.update(_token_bases(word))
+        allowed.update(self._learned_words())
+        allowed.update(self._basic_words())
+        for left, right in _SPELLING_PAIRS:
+            if left in allowed:
+                allowed.add(right)
+            if right in allowed:
+                allowed.add(left)
+        return allowed
+
+    def _unknown_words(self, text, allowed):
+        unknown = []
+        seen = set()
+        for token in re.findall(r"[A-Za-z][A-Za-z'’-]*", str(text or "")):
+            key = token.lower().replace("’", "'")
+            if key in seen:
+                continue
+            seen.add(key)
+            if _token_bases(token) & allowed:
+                continue
+            if "-" in token:
+                parts = [part for part in token.split("-") if part]
+                if parts and all(_token_bases(part) & allowed for part in parts):
+                    continue
+            unknown.append(token)
+        return unknown
+
     def _build_user_prompt(self, targets, source):
+        learned = self._learned_words()[:PROMPT_LEARNED_LIMIT]
+        known_line = ", ".join(learned) if learned else "none yet"
         lines = [
             "TASK: Write one IELTS Academic Reading Passage 1/2 style article.",
-            "TARGET LENGTH: 280-320 English words for the passage only.",
+            f"TARGET LENGTH: {PASSAGE_MIN_WORDS}-{PASSAGE_MAX_WORDS} English "
+            "words for the passage only.",
             f"TARGET WORDS ({len(targets)}):",
         ]
         for index, item in enumerate(targets, 1):
             meaning = f" - {item['meaning']}" if item["meaning"] else ""
             lines.append(f"{index}. {item['word']}{meaning}")
+
+        lines.extend([
+            "",
+            "VOCABULARY LIMIT (very important):",
+            "- Apart from the target words, use only the learner's known words "
+            "below and very common everyday English (roughly the 3,000 most "
+            "frequent words).",
+            "- Do not use rare, academic, technical or idiomatic words. If an "
+            "idea needs a difficult word, simplify the idea instead.",
+            "- The learner's known words are ordered from newest to oldest; "
+            "prefer the words near the top.",
+            "LEARNER'S KNOWN WORDS:",
+            known_line,
+        ])
 
         if source:
             lines.extend([
@@ -781,7 +975,7 @@ class DailyPassage:
             "tense, -ing) are allowed, but do not replace a target word with a "
             "synonym or a different part of speech.",
             "- The result must be one coherent article, not a list of sentences.",
-            "- Keep the non-target vocabulary at B1-B2 level; do not explain words.",
+            "- Keep every non-target word simple and common; do not explain words.",
             "- Do not include a glossary, the target-word list, bold markers, "
             "markdown, or Chinese inside the passage.",
             "- Give a natural Chinese translation of the whole passage.",
@@ -946,22 +1140,30 @@ class DailyPassage:
             else:
                 missing.append(item["word"])
         count = _word_count(body)
-        return (len(matched), -abs(count - SOURCE_WINDOW)), missing, count
+        return (len(matched), -abs(count - PASSAGE_TARGET_WORDS)), missing, count
 
     def _generate_with_ai(self, targets, source, key):
         model, base_url = self._api_settings()
+        allowed = self._allowed_vocabulary(
+            [item["word"] for item in targets]
+        )
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": self._build_user_prompt(targets, source)},
         ]
         content = self._call_deepseek(messages, key, model, base_url)
         result = self._normalize_result(self._parse_json(content), targets)
-        score, missing, count = self._score_result(result, targets)
+        _, missing, count = self._score_result(result, targets)
+        unknown = self._unknown_words(result["passage"], allowed)
 
-        if missing or count < 240 or count > 360:
+        length_bad = (
+            count < PASSAGE_ACCEPT_MIN or count > PASSAGE_ACCEPT_MAX
+        )
+        if missing or length_bad or len(unknown) > MAX_UNKNOWN_WORDS:
             print(
                 f"  初稿 {count} 词，覆盖 {len(targets) - len(missing)}/"
-                f"{len(targets)}；正在让 AI 修正一次..."
+                f"{len(targets)}，非目标超纲词 {len(unknown)} 个；"
+                "正在让 AI 修正一次..."
             )
             repair = messages + [
                 {"role": "assistant", "content": content},
@@ -970,10 +1172,13 @@ class DailyPassage:
                     "content": (
                         "Revise the article and return a complete new JSON "
                         "object with the same keys. "
-                        f"It must be 280-320 words. It missed these target "
-                        f"words: {', '.join(missing) or 'none'}. "
-                        "Use every target word naturally and keep the same "
-                        "topic. Return JSON only."
+                        f"It must be {PASSAGE_MIN_WORDS}-{PASSAGE_MAX_WORDS} "
+                        f"words. It missed these target words: "
+                        f"{', '.join(missing) or 'none'}. These non-target "
+                        f"words are too difficult for this learner: "
+                        f"{', '.join(unknown[:12]) or 'none'}. Replace them "
+                        "with simple everyday words, use every target word "
+                        "naturally, and keep the same topic. Return JSON only."
                     ),
                 },
             ]
@@ -982,9 +1187,21 @@ class DailyPassage:
                 result2 = self._normalize_result(
                     self._parse_json(content2), targets
                 )
-                score2, missing2, count2 = self._score_result(result2, targets)
-                if score2 > score:
-                    result, score, missing, count = result2, score2, missing2, count2
+                _, missing2, count2 = self._score_result(result2, targets)
+                unknown2 = self._unknown_words(result2["passage"], allowed)
+                quality = (
+                    len(targets) - len(missing),
+                    -len(unknown),
+                    -abs(count - PASSAGE_TARGET_WORDS),
+                )
+                quality2 = (
+                    len(targets) - len(missing2),
+                    -len(unknown2),
+                    -abs(count2 - PASSAGE_TARGET_WORDS),
+                )
+                if quality2 > quality:
+                    result, missing, count = result2, missing2, count2
+                    unknown = unknown2
             except DailyPassageError as exc:
                 print(f"  修正失败，保留初稿：{exc}")
 
@@ -992,6 +1209,11 @@ class DailyPassage:
             print(
                 f"  {C_ERR}注意：仍有 {len(missing)} 个目标词未覆盖："
                 f"{', '.join(missing)}{C_RESET}"
+            )
+        if len(unknown) > MAX_UNKNOWN_WORDS:
+            print(
+                f"  {C_ERR}注意：仍有 {len(unknown)} 个非目标超纲词："
+                f"{', '.join(unknown[:12])}{C_RESET}"
             )
         return result, model
 
@@ -1001,8 +1223,9 @@ class DailyPassage:
         if not targets:
             print("\n学习列表为空，请先添加并学习单词。")
             return
-        if not force and self._get_cached(self._today()):
-            self._display(self._get_cached(self._today()))
+        cached = self._current_cached()
+        if not force and cached is not None:
+            self._display(cached)
             return
 
         key = self._require_key()
@@ -1171,6 +1394,8 @@ class DailyPassage:
         matched, missing = [], []
         for word in words:
             (matched if _word_in_text(word, body) else missing).append(word)
+        allowed = self._allowed_vocabulary(words)
+        unknown = self._unknown_words(body, allowed)
 
         print("\n" + "=" * 60)
         print(f"{C_TITLE}{title}{C_RESET}")
@@ -1185,6 +1410,14 @@ class DailyPassage:
             f"正文：{_word_count(body)} 词 | "
             f"目标词覆盖：{len(matched)}/{len(words)}"
         )
+        if unknown:
+            print(
+                f"非目标超纲词：{len(unknown)} 个"
+                f"（{', '.join(unknown[:8])}"
+                f"{' ...' if len(unknown) > 8 else ''}）"
+            )
+        else:
+            print("非目标超纲词：0 个")
         if missing:
             print(f"{C_ERR}未覆盖：{', '.join(missing)}{C_RESET}")
         print("-" * 60)
