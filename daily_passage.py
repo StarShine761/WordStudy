@@ -30,7 +30,7 @@ C_DIM = "\033[2m"
 C_NOTE = "\033[1;35m"
 
 DEFAULT_BASE_URL = "https://api.deepseek.com"
-DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_MODEL = "deepseek-flash"
 DEFAULT_WORD_COUNT = 15
 MIN_TARGET_WORDS = 8
 MAX_TARGET_WORDS = 30
@@ -991,7 +991,8 @@ class DailyPassage:
             "model": model,
             "messages": messages,
             "temperature": 0.7,
-            "max_tokens": 2500,
+            # 推理模型的 reasoning_content 与 content 共用此预算，过小会导致正文为空
+            "max_tokens": 8000,
         }
         request = urllib.request.Request(
             base_url + "/chat/completions",
@@ -1033,12 +1034,24 @@ class DailyPassage:
 
         try:
             data = json.loads(raw.decode("utf-8", "replace"))
-            content = data["choices"][0]["message"]["content"]
-            if not isinstance(content, str) or not content.strip():
-                raise ValueError("empty content")
-            return content
-        except (ValueError, KeyError, IndexError, TypeError) as exc:
-            raise DailyPassageError("DeepSeek 返回内容无法解析") from exc
+            choice = data["choices"][0]
+            message = choice["message"]
+            content = message.get("content") if isinstance(message, dict) else None
+            finish = choice.get("finish_reason")
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+            snippet = _clean_space(raw.decode("utf-8", "replace"))[:200]
+            raise DailyPassageError(
+                "DeepSeek 返回内容无法解析" + (f"：{snippet}" if snippet else "")
+            ) from exc
+
+        if not isinstance(content, str) or not content.strip():
+            if finish == "length":
+                raise DailyPassageError(
+                    "DeepSeek 输出被截断：推理耗尽了 max_tokens 预算，正文为空；"
+                    "请增大 max_tokens 后重试"
+                )
+            raise DailyPassageError("DeepSeek 返回的正文为空，请重试")
+        return content
 
     def _http_error_message(self, exc):
         try:
