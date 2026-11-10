@@ -286,7 +286,7 @@ def _short_meaning(raw, limit=100):
 class DailyPassage:
     def __init__(
         self,
-        study_db_path="word_study.db",
+        study_db_path="study.db",
         vocab_db_path=None,
         config_path=None,
     ):

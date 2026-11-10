@@ -9,7 +9,7 @@ Sources:
   - skywind3000/ECDICT          (phonetic + definition fallback)
 
 The old database is moved to data/backup/ instead of being deleted, so the
-rebuild can be rolled back. word_study.db (study records + reading bank) is
+rebuild can be rolled back. study.db (study records + reading bank) is
 reset as requested.
 """
 
@@ -34,7 +34,7 @@ BASE = Path(__file__).resolve().parent
 DATA = BASE / "data" / "wordlists"
 BACKUP = BASE / "data" / "backup"
 OLD_DB = BASE / "word_learn.db"
-STUDY_DB = BASE / "word_study.db"
+STUDY_DB = BASE / "study.db"
 TMP_DB = BASE / "word_learn.new.db"
 
 EXAM_RAW = "https://raw.githubusercontent.com/exam-data/{repo}/master/{file}"
@@ -105,7 +105,7 @@ def _file_valid(path: Path, kind: str) -> bool:
 def download(url: str, dest: Path, kind: str = "json") -> None:
     if _file_valid(dest, kind):
         return
-    req = urllib.request.Request(url, headers={"User-Agent": "word-study-rebuild/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "study-rebuild/1.0"})
     last_error = None
     for attempt in range(3):
         tmp = dest.with_suffix(dest.suffix + ".part")
@@ -514,7 +514,7 @@ def backup_and_swap() -> None:
     TMP_DB.replace(OLD_DB)
 
     if STUDY_DB.exists():
-        dest = BACKUP / f"word_study.db.bak-{stamp}"
+        dest = BACKUP / f"study.db.bak-{stamp}"
         shutil.move(str(STUDY_DB), str(dest))
         print(f"Old study db moved to {dest.relative_to(BASE)}")
 

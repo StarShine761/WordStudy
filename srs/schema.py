@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Schema v2 for word_study.db.
+"""Schema v2 for study.db.
 
 Adds FSRS card state to study_list and a review_log table. All changes are
 idempotent and additive so the reading bank tables in the same file stay
@@ -123,7 +123,7 @@ def _backfill_v1_cards(conn):
 
 
 def ensure_schema(db_path):
-    """Create or migrate word_study.db to schema v2."""
+    """Create or migrate study.db to schema v2."""
     conn = sqlite3.connect(db_path)
     try:
         version = conn.execute("PRAGMA user_version").fetchone()[0]

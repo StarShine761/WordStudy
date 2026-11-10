@@ -14,7 +14,7 @@ setup(
     url="https://github.com/StarShine761/WordStudy",
     packages=find_packages(include=["srs", "srs.*", "wordstudy"]),
     py_modules=[
-        "word_study",
+        "study",
         "meaning_format",
         "online_dict",
         "reading_viewer",
@@ -39,7 +39,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "word-study=word_study:main",
+            "study=study:main",
         ],
     },
 )

@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 sys.modules.setdefault('edge_tts', types.SimpleNamespace())
 
-from word_study import WordStudyApp, WRONG_ICON
+from study import WordStudyApp, WRONG_ICON
 
 
 def _has_icon(text):
@@ -62,7 +62,7 @@ class QuizOptionTests(unittest.TestCase):
 
     def _answer(self, choice, correct_slot):
         with patch.object(self.app, 'build_quiz_options', side_effect=self._build), \
-                patch('word_study.random.randint', return_value=correct_slot), \
+                patch('study.random.randint', return_value=correct_slot), \
                 patch('builtins.input', return_value=choice):
             return self.app._ask_quiz(self.word, 'interpretation')
 
@@ -84,7 +84,7 @@ class QuizOptionTests(unittest.TestCase):
     def test_five_is_no_longer_a_valid_choice(self):
         # 第 5 个选项已移除：输入 5 会提示无效，直到输入 1-4 才作答
         with patch.object(self.app, 'build_quiz_options', side_effect=self._build), \
-                patch('word_study.random.randint', return_value=1), \
+                patch('study.random.randint', return_value=1), \
                 patch('builtins.input', side_effect=['5', '1']):
             result = self.app._ask_quiz(self.word, 'interpretation')
 
@@ -92,7 +92,7 @@ class QuizOptionTests(unittest.TestCase):
 
     def test_four_options_and_prompt_spacing(self):
         with patch.object(self.app, 'build_quiz_options', side_effect=self._build), \
-                patch('word_study.random.randint', return_value=1), \
+                patch('study.random.randint', return_value=1), \
                 patch('builtins.print') as printed, \
                 patch('builtins.input', return_value='1') as mocked_input:
             self.app._ask_quiz(self.word, 'interpretation')
@@ -108,7 +108,7 @@ class QuizOptionTests(unittest.TestCase):
     def _printed_lines(self, choice, correct_slot):
         """跑一次选择题并返回全部打印行"""
         with patch.object(self.app, 'build_quiz_options', side_effect=self._build), \
-                patch('word_study.random.randint', return_value=correct_slot), \
+                patch('study.random.randint', return_value=correct_slot), \
                 patch('builtins.input', return_value=choice), \
                 patch('builtins.print') as printed:
             self.app._ask_quiz(self.word, 'interpretation')

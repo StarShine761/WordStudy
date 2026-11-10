@@ -43,12 +43,12 @@ Options are shuffled every time; a wrong answer reveals the correct one immediat
 
 ### FSRS scheduling
 - Built on [py-fsrs](https://github.com/open-spaced-repetition/py-fsrs) (stability / difficulty model), not a fixed interval table
-- **Words imported today are mandatory**: every session today includes them and they bypass the daily new-word quota; the whole session is shuffled, so words are never shown in import/due order
-- When due reviews and new words run short the session is topped up with words learned today, sampled randomly so the same batch is not replayed all day
+- **Words imported today are mandatory**: every session today includes them; the whole session is shuffled, so words are never shown in import/due order
+- **No new-word cap, reviews = 2x new words**: import 20 new words and each session is 20 new + 40 reviews = 60 words; due cards come first and learned words top up the shortfall (sampled randomly); on days without new words, all due cards are reviewed
 - Wrong → `Again` (rescheduled at once); correct but slow or replayed → `Hard`; normal correct → `Good`
 - A new word answered correctly comes back the next day, then FSRS takes over
 - Adjustable target retention (default **0.90**), max interval 3650 days, leeches flagged automatically
-- Daily new-word limit (default 15) and session size are configurable
+- Free-practice size (default 30) is configurable and only affects mode 10 and fallback practice; modes 1-4 scale automatically with the new-word count
 
 ### Built-in word books
 `word_learn.db` ships with the repository, ready to use:
@@ -84,7 +84,7 @@ Missed words are collected automatically. Browse today's or all mistakes, or dri
 - **PDF word lists**: parse English words and Chinese meanings straight from a PDF, overwrite the local entries and add them to your study list; page numbers, phonetics and headers/footers are skipped
 
 ### Progress & settings
-The main menu shows the number of words in your list, how many are due, today's new-word progress, how many new words remain, and today's consolidation words. Session size, daily new-word limit, target retention and TTS speed live under **9. 其他设置** and are stored in `user_config.json`.
+The main menu shows the number of words in your list, how many are due, how many new words remain, today's mandatory imports, and the session mix (new words + twice as many reviews). Free-practice size, target retention and TTS speed live under **9. 其他设置** and are stored in `user_config.json`.
 
 ---
 
@@ -99,11 +99,12 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Launch (either way):
+Launch (pick one):
 
 ```bash
 start.bat                  # recommended: UTF-8, colours, 72x34 centred window
-.\.venv\Scripts\python.exe word_study.py
+study                      # once the folder is on PATH, launch from any terminal
+.\.venv\Scripts\python.exe study.py
 ```
 
 First run:
@@ -135,10 +136,10 @@ First run:
 
 ```
 WordStudy/
-├─ word_study.py         # main program: menus, study modes, TTS, notebook, settings
+├─ study.py         # main program: menus, study modes, TTS, notebook, settings
 ├─ srs/                  # FSRS core
 │  ├─ scheduler.py       #   rating policy + scheduler wrapper
-│  ├─ queue.py           #   due / new / consolidation session assembly
+│  ├─ queue.py           #   new words (uncapped) + 2x reviews session assembly
 │  ├─ quiz.py            #   distractor generation
 │  ├─ store.py           #   card & review-log persistence
 │  └─ schema.py          #   database schema
@@ -160,11 +161,11 @@ WordStudy/
 | File | Committed | Purpose |
 | --- | --- | --- |
 | `word_learn.db` | | Vocabulary database, shipped with the repo |
-| `word_study.db` | | Your progress: study list, FSRS state, mistakes, reading bank, answer log |
-| `user_config.json` | | Personal settings: session size, playback speed, … |
+| `study.db` | | Your progress: study list, FSRS state, mistakes, reading bank, answer log |
+| `user_config.json` | | Personal settings: free-practice size, playback speed, … |
 | `data/` | | Backups, raw word lists, TTS cache, reading-bank sources |
 
-`word_study.db`, `user_config.json` and `data/` are listed in `.gitignore`, so your progress is never committed. Delete `word_study.db` to start over.
+`study.db`, `user_config.json` and `data/` are listed in `.gitignore`, so your progress is never committed. Delete `study.db` to start over.
 
 ## Vocabulary sources
 

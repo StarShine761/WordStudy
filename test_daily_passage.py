@@ -92,7 +92,7 @@ class DailyPassageTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
 
-        self.study_db = os.path.join(self.tmp.name, "word_study.db")
+        self.study_db = os.path.join(self.tmp.name, "study.db")
         self.vocab_db = os.path.join(self.tmp.name, "word_learn.db")
         self.config = os.path.join(self.tmp.name, "user_config.json")
         self._build_study_db()
@@ -336,7 +336,7 @@ class DailyPassageTests(unittest.TestCase):
         self.assertEqual(missing, [])
         self.assertGreaterEqual(count, 120)
         self.assertLessEqual(count, 150)
-        self.assertEqual(model, "deepseek-chat")
+        self.assertEqual(model, "deepseek-flash")
 
     def test_cache_display_and_key_is_not_persisted(self):
         targets = self.daily.select_target_words(15)

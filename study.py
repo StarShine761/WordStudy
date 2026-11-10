@@ -243,9 +243,9 @@ class WordStudyApp:
     def __init__(self, db_path: str = "word_learn.db"):
         self.db_path = db_path
         self.user_id = 1  # 默认用户ID
-        self.study_db_path = "word_study.db"
+        self.study_db_path = "study.db"
         self.config_path = "user_config.json"
-        self.study_count = 30  # 默认每次学习单词数量
+        self.study_count = 30  # 默认自由练习单词数量
         self.init_tts()
         self.init_study_db()
         self.load_study_count()  # 加载学习数量设置
@@ -270,7 +270,7 @@ class WordStudyApp:
             print(f"保存设置失败: {e}")
 
     def load_study_count(self):
-        """加载每次学习单词数量"""
+        """加载自由练习单词数量"""
         config = self._load_config()
         try:
             self.study_count = max(1, int(config.get('study_count', 30)))
@@ -283,10 +283,6 @@ class WordStudyApp:
     def init_srs(self):
         """初始化 FSRS 调度器及学习计划参数"""
         config = self._load_config()
-        try:
-            self.new_per_day = max(0, int(config.get('new_per_day', 15)))
-        except (TypeError, ValueError):
-            self.new_per_day = 15
         try:
             self.desired_retention = min(
                 0.97, max(0.70, float(config.get('desired_retention', 0.9)))
@@ -636,7 +632,7 @@ class WordStudyApp:
         return words
     
     def add_to_study_list(self, words: List[Dict]) -> int:
-        """添加单词到学习列表（新卡片 state=0，学习时计入每日新词额度）"""
+        """添加单词到学习列表（新卡片 state=0，全部安排学习，无每日上限）"""
         now = int(time.time())
         today = datetime.now().strftime('%Y%m%d')
         conn = sqlite3.connect(self.study_db_path)
@@ -654,20 +650,19 @@ class WordStudyApp:
             conn.close()
         return added
 
-    def get_today_study_words(self, max_count: int = None) -> List[Dict]:
-        """获取本次学习队列（到期复习优先，新词受每日额度限制）"""
-        return self.get_session_words(max_count)
+    def get_today_study_words(self) -> List[Dict]:
+        """获取本次学习队列（新词无上限，复习数量为新词的两倍）"""
+        return self.get_session_words()
 
-    def get_today_review_words(self, max_count: int = None) -> List[Dict]:
-        return self.get_session_words(max_count)
+    def get_today_review_words(self) -> List[Dict]:
+        return self.get_session_words()
 
-    def get_session_words(self, max_count: int = None) -> List[Dict]:
-        size = self.study_count if max_count is None else max_count
+    def get_session_words(self) -> List[Dict]:
         now = int(time.time())
         today = datetime.now().strftime('%Y%m%d')
         conn = sqlite3.connect(self.study_db_path)
         try:
-            plan = build_session(conn, now, today, size, self.new_per_day)
+            plan = build_session(conn, now, today)
         finally:
             conn.close()
         return self._cards_to_words(plan.items)
@@ -708,7 +703,7 @@ class WordStudyApp:
         today = datetime.now().strftime('%Y%m%d')
         conn = sqlite3.connect(self.study_db_path)
         try:
-            return session_stats(conn, now, today, self.new_per_day, self.study_count)
+            return session_stats(conn, now, today)
         finally:
             conn.close()
 
@@ -732,7 +727,7 @@ class WordStudyApp:
             if choice != 'y':
                 return [], False
             self.interactive_search()
-            words = self.get_today_study_words(self.study_count)
+            words = self.get_today_study_words()
             if words:
                 print("\n已把新词加入本次学习队列")
                 return words, False
@@ -999,7 +994,7 @@ class WordStudyApp:
     def _print_extra_hint(self, words: List[Dict]):
         extra = sum(1 for word in words if word.get('is_extra'))
         if extra:
-            print(f"提示：其中 {extra} 个为巩固词，从今日已学的词中随机抽取")
+            print(f"提示：其中 {extra} 个为补充复习词（到期词不足新词两倍时，从已学词中抽取）")
 
     def mode_english_to_chinese(self):
         """模式1: 看英文，选择中文（选择题模式）"""
@@ -1008,7 +1003,7 @@ class WordStudyApp:
         print("="*60)
         
         practice_mode = False
-        study_words = self.get_today_study_words(self.study_count)
+        study_words = self.get_today_study_words()
         if not study_words:
             study_words, practice_mode = self._fallback_practice("学习")
             if not study_words:
@@ -1043,13 +1038,13 @@ class WordStudyApp:
         print("="*60)
     
     def mode_chinese_to_english(self):
-        """模式2: 看中文，选择英文（选择题模式）"""
+        """模式4: 看中文，选择英文（选择题模式）"""
         print("\n" + "="*60)
-        print("\033[1;32m模式2: 看中文，选择英文\033[0m")
+        print("\033[1;32m模式4: 看中文，选择英文\033[0m")
         print("="*60)
         
         practice_mode = False
-        review_words = self.get_today_review_words(self.study_count)
+        review_words = self.get_today_review_words()
         if not review_words:
             review_words, practice_mode = self._fallback_practice("复习")
             if not review_words:
@@ -1091,7 +1086,7 @@ class WordStudyApp:
         print("="*60)
         
         practice_mode = False
-        review_words = self.get_today_review_words(self.study_count)
+        review_words = self.get_today_review_words()
         if not review_words:
             review_words, practice_mode = self._fallback_practice("复习")
             if not review_words:
@@ -1131,16 +1126,16 @@ class WordStudyApp:
         print("="*60)
     
     def mode_listen_to_chinese(self):
-        """模式4: 听音选中（听发音，选择中文释义）"""
+        """模式2: 听音选中（听发音，选择中文释义）"""
         print("\n" + "="*60)
-        print("\033[1;32m模式4: 听音选中\033[0m")
+        print("\033[1;32m模式2: 听音选中\033[0m")
         print("="*60)
         print("只播放单词发音，不显示单词，请根据发音选择正确的中文释义")
         print("输入 9 可重新播放发音")
         print("="*60)
         
         practice_mode = False
-        study_words = self.get_today_study_words(self.study_count)
+        study_words = self.get_today_study_words()
         if not study_words:
             study_words, practice_mode = self._fallback_practice("学习")
             if not study_words:
@@ -1357,9 +1352,9 @@ class WordStudyApp:
             print("错题复习模式")
             print("="*60)
             print("1. 看英选中")
-            print("2. 看中选英")
+            print("2. 听音选中")
             print("3. 看中拼写英")
-            print("4. 听音选中")
+            print("4. 看中选英")
             print("0. 返回")
             print("="*60)
             
@@ -1370,11 +1365,11 @@ class WordStudyApp:
             elif choice == '1':
                 self.mode_english_to_chinese_with_words(words)
             elif choice == '2':
-                self.mode_chinese_to_english_with_words(words)
+                self.mode_listen_to_chinese_with_words(words)
             elif choice == '3':
                 self.mode_chinese_to_spelling_with_words(words)
             elif choice == '4':
-                self.mode_listen_to_chinese_with_words(words)
+                self.mode_chinese_to_english_with_words(words)
             else:
                 print("无效选择")
     
@@ -1418,7 +1413,7 @@ class WordStudyApp:
     def mode_chinese_to_english_with_words(self, words: List[Dict], practice=None):
         """指定单词列表的看中选英模式；practice=None 时按到期状态自动判断"""
         print("\n" + "="*60)
-        print("\033[1;32m模式2: 看中选英\033[0m")
+        print("\033[1;32m模式4: 看中选英\033[0m")
         print("="*60)
         
         correct_count = 0
@@ -1500,7 +1495,7 @@ class WordStudyApp:
     def mode_listen_to_chinese_with_words(self, words: List[Dict], practice=None):
         """指定单词列表的听音选中模式；practice=None 时按到期状态自动判断"""
         print("\n" + "="*60)
-        print("\033[1;32m模式4: 听音选中\033[0m")
+        print("\033[1;32m模式2: 听音选中\033[0m")
         print("="*60)
         print("只播放单词发音，不显示单词，请根据发音选择正确的中文释义")
         print("输入 9 可重新播放发音")
@@ -1638,7 +1633,7 @@ class WordStudyApp:
         print("按 Ctrl+C 退出播放")
         print("="*60)
         
-        words = self.get_today_review_words(self.study_count)
+        words = self.get_today_review_words()
         if not words:
             self._print_empty_session_hint("复习")
             return
@@ -2870,18 +2865,18 @@ class WordStudyApp:
             print("英语单词学习工具")
             print("="*60)
             print(f"学习列表 {stats['total']} 词 | 今日到期 {stats['due']} | "
-                  f"新词 {stats['new_introduced']}/{stats['new_limit']} | "
                   f"待学新词 {stats['new_available']}")
             if stats['new_today']:
                 print(f"今日导入必学 {stats['new_today']} 词 | "
                       f"未学 {stats['new_today_pending']}")
-            if stats['extra_available']:
-                print(f"今日巩固 {stats['extra_available']} 词（今日已学词随机巩固）")
+            if stats['session_new']:
+                print(f"本次学习：新词 {stats['session_new']} + 复习 {stats['session_review']} "
+                      f"= {stats['session_new'] + stats['session_review']} 词（复习为新词的两倍）")
             print("="*60)
             print("1. 看英选中 (带发音)")
-            print("2. 看中选英")
+            print("2. 听音选中 (听发音选中文)")
             print("3. 看中拼写英")
-            print("4. 听音选中 (听发音选中文)")
+            print("4. 看中选英")
             print("5. 语音播放")
             print("6. 错题本")
             print("7. 搜索并添加单词")
@@ -2900,11 +2895,11 @@ class WordStudyApp:
             elif choice == '1':
                 self.mode_english_to_chinese()
             elif choice == '2':
-                self.mode_chinese_to_english()
+                self.mode_listen_to_chinese()
             elif choice == '3':
                 self.mode_chinese_to_spelling()
             elif choice == '4':
-                self.mode_listen_to_chinese()
+                self.mode_chinese_to_english()
             elif choice == '5':
                 self.audio_playback_menu()
             elif choice == '6':
@@ -2935,9 +2930,9 @@ class WordStudyApp:
         
         print(f"本次随机抽取 {len(words)} 个单词，练习结果不影响复习计划")
         print("1. 看英选中")
-        print("2. 看中选英")
+        print("2. 听音选中")
         print("3. 看中拼写英")
-        print("4. 听音选中")
+        print("4. 看中选英")
         print("0. 返回")
         print("="*60)
         
@@ -2947,11 +2942,11 @@ class WordStudyApp:
         elif choice == '1':
             self.mode_english_to_chinese_with_words(words, practice=True)
         elif choice == '2':
-            self.mode_chinese_to_english_with_words(words, practice=True)
+            self.mode_listen_to_chinese_with_words(words, practice=True)
         elif choice == '3':
             self.mode_chinese_to_spelling_with_words(words, practice=True)
         elif choice == '4':
-            self.mode_listen_to_chinese_with_words(words, practice=True)
+            self.mode_chinese_to_english_with_words(words, practice=True)
         else:
             print("无效选择")
     
@@ -2961,7 +2956,7 @@ class WordStudyApp:
         print("\033[1;32m自由学习\033[0m")
         print("="*60)
 
-        words = self.get_session_words(self.study_count)
+        words = self.get_session_words()
         source = "今日学习队列"
         if not words:
             words = self.get_practice_words(self.study_count)
@@ -3208,13 +3203,12 @@ class WordStudyApp:
             print("其他设置")
             print("="*60)
             print("9.1 查看今日添加的单词")
-            print("9.2 设置每次学习数量")
-            print(f"9.3 设置每日新词上限 (当前 {self.new_per_day})")
-            print(f"9.4 设置目标记忆保持率 (当前 {self.desired_retention:.2f})")
+            print("9.2 设置自由练习数量")
+            print(f"9.3 设置目标记忆保持率 (当前 {self.desired_retention:.2f})")
             print("0. 返回")
             print("="*60)
             
-            choice = input("请选择 (0/9.1/9.2/9.3/9.4): ").strip()
+            choice = input("请选择 (0/9.1/9.2/9.3): ").strip()
             
             if choice == '0':
                 break
@@ -3223,18 +3217,17 @@ class WordStudyApp:
             elif choice == '9.2' or choice == '2':
                 self.set_study_count()
             elif choice == '9.3' or choice == '3':
-                self.set_new_per_day()
-            elif choice == '9.4' or choice == '4':
                 self.set_desired_retention()
             else:
                 print("无效选择")
     
     def set_study_count(self):
-        """设置每次学习单词数量"""
+        """设置自由练习单词数量（模式10及无词时的兜底练习）"""
         print("\n" + "="*60)
-        print("设置每次学习数量")
+        print("设置自由练习数量")
         print("="*60)
-        print(f"当前设置: 每次学习 {self.study_count} 个单词")
+        print(f"当前设置: 自由练习每次 {self.study_count} 个单词")
+        print("说明: 模式1-4按「新词全部学 + 复习两倍新词」自动安排，不受此设置影响")
         print("\n请输入新的数量 (1-50，输入0返回):")
         
         try:
@@ -3246,32 +3239,9 @@ class WordStudyApp:
             if 1 <= new_count <= 50:
                 self.study_count = new_count
                 self.save_study_count()
-                print(f"已设置每次学习 {self.study_count} 个单词")
+                print(f"已设置自由练习每次 {self.study_count} 个单词")
             else:
                 print("请输入1-50之间的数字")
-        except ValueError:
-            print("请输入有效的数字")
-
-    def set_new_per_day(self):
-        """设置每日新词上限"""
-        print("\n" + "="*60)
-        print("设置每日新词上限")
-        print("="*60)
-        print(f"当前设置: 每天最多学习 {self.new_per_day} 个新词")
-        print("提示: 0 表示不安排新词，只复习到期单词；建议 10-20")
-        print("="*60)
-        
-        try:
-            value = input("请输入新的上限 (0-100，输入q返回): ").strip()
-            if value.lower() == 'q':
-                return
-            new_limit = int(value)
-            if 0 <= new_limit <= 100:
-                self.new_per_day = new_limit
-                self._save_config({'new_per_day': new_limit})
-                print(f"每日新词上限已设置为 {self.new_per_day}")
-            else:
-                print("请输入0-100之间的数字")
         except ValueError:
             print("请输入有效的数字")
 

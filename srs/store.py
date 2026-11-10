@@ -73,20 +73,23 @@ def add_card(conn, voc_id, vocabulary, now, today):
     return cursor.rowcount
 
 
-def due_cards(conn, now, today, limit, exclude_today=False):
+def due_cards(conn, now, today, limit=None, exclude_today=False):
     exclude_sql = "AND (s.add_date IS NULL OR s.add_date <> ?)" if exclude_today else ""
     conn.row_factory = sqlite3.Row
     params = [now, today]
     if exclude_today:
         params.append(today)
-    params.append(limit)
+    limit_sql = ""
+    if limit is not None:
+        limit_sql = "LIMIT ?"
+        params.append(limit)
     rows = conn.execute(
         f"""
         SELECT {_COLUMNS} FROM study_list s
         WHERE {_DUE_PREDICATE}
           {exclude_sql}
         ORDER BY s.is_leech DESC, s.due_at ASC, s.id ASC
-        LIMIT ?
+        {limit_sql}
         """,
         params,
     ).fetchall()
@@ -132,13 +135,16 @@ def today_new_cards(conn, today):
     return [CardRow(**dict(row)) for row in rows]
 
 
-def new_cards(conn, today, limit, exclude_today=False):
+def new_cards(conn, today, limit=None, exclude_today=False):
     conn.row_factory = sqlite3.Row
     exclude_sql = "AND (s.add_date IS NULL OR s.add_date <> ?)" if exclude_today else ""
     params = [today]
     if exclude_today:
         params.append(today)
-    params.append(limit)
+    limit_sql = ""
+    if limit is not None:
+        limit_sql = "LIMIT ?"
+        params.append(limit)
     rows = conn.execute(
         f"""
         SELECT {_COLUMNS} FROM study_list s
@@ -149,7 +155,7 @@ def new_cards(conn, today, limit, exclude_today=False):
           )
           {exclude_sql}
         ORDER BY s.created_at IS NULL, s.created_at ASC, s.id ASC
-        LIMIT ?
+        {limit_sql}
         """,
         params,
     ).fetchall()
@@ -198,16 +204,6 @@ def extra_cards(conn, today, limit, exclude_ids=(), exclude_today=False):
 
 def count_new_total(conn):
     return conn.execute("SELECT COUNT(*) FROM study_list WHERE state = 0").fetchone()[0]
-
-
-def new_introduced_today(conn, today):
-    return conn.execute(
-        """
-        SELECT COUNT(DISTINCT voc_id) FROM review_log
-        WHERE local_date = ? AND state_before = 0 AND is_practice = 0
-        """,
-        (today,),
-    ).fetchone()[0]
 
 
 def is_due(conn, voc_id, now):

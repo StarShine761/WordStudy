@@ -19,7 +19,7 @@ try {
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 
-# Switch to script folder so .venv and word_study.py can be found
+# Switch to script folder so .venv and study.py can be found
 Set-Location $PSScriptRoot
 
 # Narrow the console to the 60-column UI and center it; the default window is
@@ -103,5 +103,5 @@ if (-not (Test-Path $py)) {
     exit 1
 }
 
-& $py word_study.py
+& $py study.py
 Read-Host "Press Enter to exit"

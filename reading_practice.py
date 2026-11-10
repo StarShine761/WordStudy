@@ -64,7 +64,7 @@ def loose_answer(value):
 
 
 class ReadingPractice:
-    def __init__(self, db_path="word_study.db", vocab_db_path=None,
+    def __init__(self, db_path="study.db", vocab_db_path=None,
                  config_path=None):
         self.db_path = db_path
         self.vocab_db_path = vocab_db_path or os.path.join(

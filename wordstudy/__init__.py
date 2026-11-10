@@ -6,6 +6,6 @@
 __version__ = "1.0.0"
 __author__ = "Your Name"
 
-from .word_study import WordStudyApp, main
+from .study import WordStudyApp, main
 
 __all__ = ["WordStudyApp", "main"]

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""导入雅思阅读题库（hwttop5/ielts-reading-past-papers）到 word_study.db。"""
+"""导入雅思阅读题库（hwttop5/ielts-reading-past-papers）到 study.db。"""
 
 import concurrent.futures
 import json
@@ -16,7 +16,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data", "ielts_reading_src")
 EXAM_DIR = os.path.join(DATA_DIR, "exams")
 MANIFEST = os.path.join(DATA_DIR, "manifest.json")
-DB_PATH = os.path.join(BASE_DIR, "word_study.db")
+DB_PATH = os.path.join(BASE_DIR, "study.db")
 CDN = "https://cdn.jsdelivr.net/gh/hwttop5/ielts-reading-past-papers@main/"
 RAW = "https://raw.githubusercontent.com/hwttop5/ielts-reading-past-papers/main/"
 SOURCE_URL = "https://github.com/hwttop5/ielts-reading-past-papers"

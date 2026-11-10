@@ -1,0 +1,4 @@
+#!/bin/sh
+# Git Bash / MSYS 启动器：cmd 和 PowerShell 使用 study.bat
+cd "$(dirname "$0")" || exit 1
+exec ./.venv/Scripts/python.exe study.py "$@"
