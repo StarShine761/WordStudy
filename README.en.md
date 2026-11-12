@@ -44,7 +44,7 @@ Options are shuffled every time; a wrong answer reveals the correct one immediat
 ### FSRS scheduling
 - Built on [py-fsrs](https://github.com/open-spaced-repetition/py-fsrs) (stability / difficulty model), not a fixed interval table
 - **Words imported today are mandatory**: every session today includes them; the whole session is shuffled, so words are never shown in import/due order
-- **No new-word cap, reviews = 2x new words**: import 20 new words and each session is 20 new + 40 reviews = 60 words; due cards come first and learned words top up the shortfall (sampled randomly); on days without new words, all due cards are reviewed
+- **No new-word cap, reviews = 2x words imported today**: a session is at most 3x the imports — import 20 new words and each session is 20 new + 40 reviews = 60 words (the unlearned backlog does not count toward the review base); due cards come first and learned words top up the shortfall (sampled randomly); on days without imports, all due cards are reviewed
 - Wrong → `Again` (rescheduled at once); correct but slow or replayed → `Hard`; normal correct → `Good`
 - A new word answered correctly comes back the next day, then FSRS takes over
 - Adjustable target retention (default **0.90**), max interval 3650 days, leeches flagged automatically
@@ -84,7 +84,7 @@ Missed words are collected automatically. Browse today's or all mistakes, or dri
 - **PDF word lists**: parse English words and Chinese meanings straight from a PDF, overwrite the local entries and add them to your study list; page numbers, phonetics and headers/footers are skipped
 
 ### Progress & settings
-The main menu shows the number of words in your list, how many are due, how many new words remain, today's mandatory imports, and the session mix (new words + twice as many reviews). Free-practice size, target retention and TTS speed live under **9. 其他设置** and are stored in `user_config.json`.
+The main menu shows the number of words in your list, how many are due, how many new words remain, today's mandatory imports, and the session mix (new words + 2x today's imports in reviews). Free-practice size, target retention and TTS speed live under **9. 其他设置** and are stored in `user_config.json`.
 
 ---
 
@@ -139,7 +139,7 @@ WordStudy/
 ├─ study.py         # main program: menus, study modes, TTS, notebook, settings
 ├─ srs/                  # FSRS core
 │  ├─ scheduler.py       #   rating policy + scheduler wrapper
-│  ├─ queue.py           #   new words (uncapped) + 2x reviews session assembly
+│  ├─ queue.py           #   new words (uncapped) + 2x today's imports in reviews
 │  ├─ quiz.py            #   distractor generation
 │  ├─ store.py           #   card & review-log persistence
 │  └─ schema.py          #   database schema

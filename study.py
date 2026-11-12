@@ -651,7 +651,7 @@ class WordStudyApp:
         return added
 
     def get_today_study_words(self) -> List[Dict]:
-        """获取本次学习队列（新词无上限，复习数量为新词的两倍）"""
+        """获取本次学习队列（新词无上限，复习为今日导入词的两倍，整场约三倍导入数）"""
         return self.get_session_words()
 
     def get_today_review_words(self) -> List[Dict]:
@@ -994,7 +994,7 @@ class WordStudyApp:
     def _print_extra_hint(self, words: List[Dict]):
         extra = sum(1 for word in words if word.get('is_extra'))
         if extra:
-            print(f"提示：其中 {extra} 个为补充复习词（到期词不足新词两倍时，从已学词中抽取）")
+            print(f"提示：其中 {extra} 个为补充复习词（到期词不足今日导入词两倍时，从已学词中抽取）")
 
     def mode_english_to_chinese(self):
         """模式1: 看英文，选择中文（选择题模式）"""
@@ -2870,8 +2870,10 @@ class WordStudyApp:
                 print(f"今日导入必学 {stats['new_today']} 词 | "
                       f"未学 {stats['new_today_pending']}")
             if stats['session_new']:
+                ratio_hint = ("复习为今日导入词的两倍" if stats['new_today']
+                              else "复习全部到期词")
                 print(f"本次学习：新词 {stats['session_new']} + 复习 {stats['session_review']} "
-                      f"= {stats['session_new'] + stats['session_review']} 词（复习为新词的两倍）")
+                      f"= {stats['session_new'] + stats['session_review']} 词（{ratio_hint}）")
             print("="*60)
             print("1. 看英选中 (带发音)")
             print("2. 听音选中 (听发音选中文)")
@@ -3227,7 +3229,7 @@ class WordStudyApp:
         print("设置自由练习数量")
         print("="*60)
         print(f"当前设置: 自由练习每次 {self.study_count} 个单词")
-        print("说明: 模式1-4按「新词全部学 + 复习两倍新词」自动安排，不受此设置影响")
+        print("说明: 模式1-4按「新词全部学 + 复习两倍今日导入词（整场约三倍导入数）」自动安排，不受此设置影响")
         print("\n请输入新的数量 (1-50，输入0返回):")
         
         try:

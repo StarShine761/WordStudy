@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Session building: all new words (no daily cap), reviews = 2x new words."""
+"""Session building: all new words (no daily cap), reviews = 2x today's imports."""
 
 import random
 from dataclasses import dataclass, field
@@ -49,13 +49,13 @@ def build_session(conn, now, today):
     new = store.new_cards(conn, today, exclude_today=True)
     new_count = len(mandatory) + len(new)
 
-    if new_count:
-        # Reviews are twice the new-word count; due cards first, learned
-        # cards top up when fewer than 2x are due.
-        review_target = 2 * new_count
+    if mandatory:
+        # Sessions run at most 3x today's imports: the imports themselves plus
+        # reviews at 2x. The unlearned backlog does not count toward the base.
+        review_target = 2 * len(mandatory)
         due = store.due_cards(conn, now, today, review_target, exclude_today=True)
     else:
-        # No new words today: review everything that is due.
+        # Nothing imported today: review everything that is due.
         review_target = None
         due = store.due_cards(conn, now, today, exclude_today=True)
 
