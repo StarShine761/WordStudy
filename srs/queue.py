@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Session building: all new words (no daily cap), reviews = 2x today's imports."""
+"""Session building: at most 60 cards per session, hardest due reviews first."""
 
 import random
 from dataclasses import dataclass, field
 
 from . import store
+
+MIN_SESSION_SIZE = 40
+MAX_SESSION_SIZE = 60
 
 
 @dataclass
@@ -41,23 +44,18 @@ def _interleave(due, new):
 
 
 def build_session(conn, now, today):
-    # Every word imported today is studied in every session today, even if it
-    # was already answered. All remaining unlearned new words join them: there
-    # is no daily cap. The final order is shuffled so repeated runs do not
-    # replay the same sequence.
-    mandatory = store.today_imported_cards(conn, today)
-    new = store.new_cards(conn, today, exclude_today=True)
-    new_count = len(mandatory) + len(new)
+    # A session is capped at MAX_SESSION_SIZE cards. Today's imports go first,
+    # then the unlearned backlog, then due reviews ordered by wrong-answer
+    # count. Cards answered today are no longer due, so running the session
+    # again the same day continues with the due words not yet reviewed. When
+    # the total is below MIN_SESSION_SIZE, learned cards fill the gap.
+    mandatory = store.today_imported_cards(conn, today)[:MAX_SESSION_SIZE]
+    budget = MAX_SESSION_SIZE - len(mandatory)
 
-    if mandatory:
-        # Sessions run at most 3x today's imports: the imports themselves plus
-        # reviews at 2x. The unlearned backlog does not count toward the base.
-        review_target = 2 * len(mandatory)
-        due = store.due_cards(conn, now, today, review_target, exclude_today=True)
-    else:
-        # Nothing imported today: review everything that is due.
-        review_target = None
-        due = store.due_cards(conn, now, today, exclude_today=True)
+    new = store.new_cards(conn, today, budget, exclude_today=True)
+
+    budget -= len(new)
+    due = store.due_cards(conn, now, today, budget, exclude_today=True)
 
     items = [QueueItem(card, True) for card in mandatory]
     items += _interleave(
@@ -66,21 +64,20 @@ def build_session(conn, now, today):
     )
 
     extra = []
-    if review_target is not None:
-        missing = review_target - len(due)
-        if missing > 0:
-            taken = [item.card.voc_id for item in items if not item.is_new]
-            extra = store.extra_cards(
-                conn, today, missing, taken, exclude_today=True
-            )
-            items.extend(QueueItem(card, False, True) for card in extra)
+    missing = MIN_SESSION_SIZE - len(items)
+    if missing > 0:
+        taken = [item.card.voc_id for item in items]
+        extra = store.extra_cards(
+            conn, today, missing, taken, exclude_today=True
+        )
+        items.extend(QueueItem(card, False, True) for card in extra)
 
     random.shuffle(items)
 
     return SessionPlan(
         items=items,
         due_total=len(due),
-        new_total=new_count,
+        new_total=len(mandatory) + len(new),
         extra_total=len(extra),
         mandatory_total=len(mandatory),
         mandatory_pending=len(store.today_new_cards(conn, today)),
@@ -98,6 +95,8 @@ def session_stats(conn, now, today):
         "new_today": plan.mandatory_total,
         "new_today_pending": plan.mandatory_pending,
         "session_new": plan.new_total,
+        "session_due": plan.due_total,
+        "due_remaining": max(0, store.count_due(conn, now, today) - plan.due_total),
         "session_review": plan.due_total + plan.extra_total,
         "extra_available": plan.extra_total,
         "total": total_cards,

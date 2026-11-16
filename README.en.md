@@ -39,16 +39,16 @@
 | Free practice (自由练习) | Random words, **does not touch your review schedule** | Drilling stubborn words |
 | Free learning (自由学习) | Judge each word "known / unknown"; unknown ones show meaning + example and come back until all are learned | Fast pass over a list |
 
-Options are shuffled every time; a wrong answer reveals the correct one immediately, and the result is converted into an FSRS rating from correctness and answer speed — no manual difficulty picking.
+After the prompt appears, all options are revealed 2 seconds later to allow a moment of recall. Options are shuffled every time; a wrong answer reveals the correct one immediately, and the result is converted into an FSRS rating from correctness and answer speed — no manual difficulty picking.
 
 ### FSRS scheduling
 - Built on [py-fsrs](https://github.com/open-spaced-repetition/py-fsrs) (stability / difficulty model), not a fixed interval table
 - **Words imported today are mandatory**: every session today includes them; the whole session is shuffled, so words are never shown in import/due order
-- **No new-word cap, reviews = 2x words imported today**: a session is at most 3x the imports — import 20 new words and each session is 20 new + 40 reviews = 60 words (the unlearned backlog does not count toward the review base); due cards come first and learned words top up the shortfall (sampled randomly); on days without imports, all due cards are reviewed
+- **Each session is capped at 60 new + review words**: today's imports go first, then the unlearned backlog, and the remaining budget goes to due reviews ordered by wrong-answer count; words reviewed today are not shown again, so starting another session the same day continues with the due words still unreviewed; when the total is below 40, learned words are sampled at random to reach 40 (marked as supplementary reviews)
 - Wrong → `Again` (rescheduled at once); correct but slow or replayed → `Hard`; normal correct → `Good`
 - A new word answered correctly comes back the next day, then FSRS takes over
 - Adjustable target retention (default **0.90**), max interval 3650 days, leeches flagged automatically
-- Free-practice size (default 30) is configurable and only affects mode 10 and fallback practice; modes 1-4 scale automatically with the new-word count
+- Free-practice size (default 30) is configurable and only affects mode 10 and fallback practice; modes 1-4 follow new words plus due reviews, with 40–60 words per session
 
 ### Built-in word books
 `word_learn.db` ships with the repository, ready to use:
@@ -84,7 +84,7 @@ Missed words are collected automatically. Browse today's or all mistakes, or dri
 - **PDF word lists**: parse English words and Chinese meanings straight from a PDF, overwrite the local entries and add them to your study list; page numbers, phonetics and headers/footers are skipped
 
 ### Progress & settings
-The main menu shows the number of words in your list, how many are due, how many new words remain, today's mandatory imports, and the session mix (new words + 2x today's imports in reviews). Free-practice size, target retention and TTS speed live under **9. 其他设置** and are stored in `user_config.json`.
+The main menu shows the number of words in your list, how many are due, how many new words remain, today's mandatory imports, and the session mix (new words + due reviews + supplementary reviews). Free-practice size, target retention and TTS speed live under **9. 其他设置** and are stored in `user_config.json`.
 
 ---
 
@@ -139,7 +139,7 @@ WordStudy/
 ├─ study.py         # main program: menus, study modes, TTS, notebook, settings
 ├─ srs/                  # FSRS core
 │  ├─ scheduler.py       #   rating policy + scheduler wrapper
-│  ├─ queue.py           #   new words (uncapped) + 2x today's imports in reviews
+│  ├─ queue.py           #   new + due reviews capped at 60 per session, hardest due words first, padded to 40 from learned words
 │  ├─ quiz.py            #   distractor generation
 │  ├─ store.py           #   card & review-log persistence
 │  └─ schema.py          #   database schema

@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 sys.modules.setdefault('edge_tts', types.SimpleNamespace())
 
-from study import WordStudyApp, WRONG_ICON
+from study import WordStudyApp, WRONG_ICON, OPTIONS_REVEAL_DELAY
 
 
 def _has_icon(text):
@@ -63,6 +63,7 @@ class QuizOptionTests(unittest.TestCase):
     def _answer(self, choice, correct_slot):
         with patch.object(self.app, 'build_quiz_options', side_effect=self._build), \
                 patch('study.random.randint', return_value=correct_slot), \
+                patch('study.time.sleep'), \
                 patch('builtins.input', return_value=choice):
             return self.app._ask_quiz(self.word, 'interpretation')
 
@@ -85,6 +86,7 @@ class QuizOptionTests(unittest.TestCase):
         # 第 5 个选项已移除：输入 5 会提示无效，直到输入 1-4 才作答
         with patch.object(self.app, 'build_quiz_options', side_effect=self._build), \
                 patch('study.random.randint', return_value=1), \
+                patch('study.time.sleep'), \
                 patch('builtins.input', side_effect=['5', '1']):
             result = self.app._ask_quiz(self.word, 'interpretation')
 
@@ -93,6 +95,7 @@ class QuizOptionTests(unittest.TestCase):
     def test_four_options_and_prompt_spacing(self):
         with patch.object(self.app, 'build_quiz_options', side_effect=self._build), \
                 patch('study.random.randint', return_value=1), \
+                patch('study.time.sleep'), \
                 patch('builtins.print') as printed, \
                 patch('builtins.input', return_value='1') as mocked_input:
             self.app._ask_quiz(self.word, 'interpretation')
@@ -105,10 +108,31 @@ class QuizOptionTests(unittest.TestCase):
         # 提示本身不再额外插入空行
         self.assertFalse(mocked_input.call_args.args[0].startswith('\n'))
 
+    def test_options_are_shown_after_delay(self):
+        events = []
+        with patch.object(self.app, 'build_quiz_options', side_effect=self._build), \
+                patch('study.random.randint', return_value=1), \
+                patch('study.time.sleep',
+                      side_effect=lambda s: events.append(('sleep', s))), \
+                patch('builtins.print',
+                      side_effect=lambda *a, **k: events.append(
+                          ('print', str(a[0]) if a else ''))), \
+                patch('builtins.input', return_value='1'):
+            self.app._ask_quiz(self.word, 'interpretation')
+
+        delay_event = ('sleep', OPTIONS_REVEAL_DELAY)
+        self.assertIn(delay_event, events)
+        first_option = next(
+            i for i, (kind, line) in enumerate(events)
+            if kind == 'print' and '1. 甲' in line
+        )
+        self.assertLess(events.index(delay_event), first_option)
+
     def _printed_lines(self, choice, correct_slot):
         """跑一次选择题并返回全部打印行"""
         with patch.object(self.app, 'build_quiz_options', side_effect=self._build), \
                 patch('study.random.randint', return_value=correct_slot), \
+                patch('study.time.sleep'), \
                 patch('builtins.input', return_value=choice), \
                 patch('builtins.print') as printed:
             self.app._ask_quiz(self.word, 'interpretation')

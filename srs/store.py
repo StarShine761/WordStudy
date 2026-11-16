@@ -85,10 +85,16 @@ def due_cards(conn, now, today, limit=None, exclude_today=False):
         params.append(limit)
     rows = conn.execute(
         f"""
-        SELECT {_COLUMNS} FROM study_list s
+        SELECT {_QUALIFIED_COLUMNS} FROM study_list s
+        LEFT JOIN (
+            SELECT voc_id, MAX(wrong_count) AS wrong_count
+            FROM wrong_words
+            GROUP BY voc_id
+        ) w ON w.voc_id = s.voc_id
         WHERE {_DUE_PREDICATE}
           {exclude_sql}
-        ORDER BY s.is_leech DESC, s.due_at ASC, s.id ASC
+        ORDER BY COALESCE(w.wrong_count, 0) DESC,
+                 s.is_leech DESC, s.due_at ASC, s.id ASC
         {limit_sql}
         """,
         params,
